@@ -2,8 +2,8 @@
 
 An end-to-end retail analytics project on the Sample Superstore dataset (9,994 US
 order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL business
-analysis, customer segmentation and a loss-risk model; next come a dashboard and an AI
-query layer.
+analysis, customer segmentation, a loss-risk model and an interactive Streamlit
+dashboard; next comes an AI query layer.
 
 **Core business question: where does the company lose money, and how can it grow profit?**
 
@@ -101,6 +101,20 @@ first control and the model only to review lines discounted 1–20%.
 
 Full analysis: [`notebooks/04_loss_risk_model.ipynb`](notebooks/04_loss_risk_model.ipynb).
 
+## Interactive dashboard (step 5)
+
+A three-page Streamlit app built from the same tested code as the notebooks:
+
+| Page | What it shows |
+|---|---|
+| **Overview** | sales, profit, margin and profit on >20%-discount lines, plus margin by discount band; filters for category, region and state |
+| **Customers** | loss-making vs. profitable high-volume customers, their discount mix, and where they fall in the K-Means clusters |
+| **Loss-risk checker** | pick a sub-category, state, discount and quantity; get the model's predicted loss risk, what the two discount rules would say, how similar past lines turned out, and a SHAP explanation |
+
+On first start the app rebuilds the DuckDB database from the raw CSV in this repo
+(the `.duckdb` file is not in git) and trains the step 4 Random Forest on 2014–2016 with
+the settings tuned in notebook 04; both are cached, so later visits are instant.
+
 ## Project structure
 
 ```
@@ -113,9 +127,13 @@ src/customer_features.py  customer-level RFM, discount, product and region featu
 src/segmentation.py    RFM scoring, R x F segments, K-Means with k-selection checks
 src/customer_comparison.py  step 3 comparisons with bootstrap confidence intervals
 src/loss_model.py      step 4 baselines, Logistic Regression, Random Forest, SHAP
+streamlit_app.py       dashboard entry point (page navigation)
+app/data.py            cached database build, table loaders and model training
+app/views/             dashboard pages: overview, customers, risk_checker
 sql/01-07_*.sql        business queries, each with question + insight in its header
 sql/SCHEMA.md          every table, column and type in the database
-tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation
+tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation,
+                       leakage guards, dashboard pages (Streamlit AppTest)
 notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation,
                        04 loss-risk model
 reports/figures/       charts used in this README
@@ -127,8 +145,8 @@ customer-level tables: `customer_features`, `customer_mix`, `customer_rfm` and
 `customer_clusters`.
 
 **Tech stack:** Python 3.12, pandas, DuckDB (SQL), scikit-learn, SHAP, SciPy, matplotlib,
-Jupyter, pytest, pyarrow.
-All free and open source.
+Streamlit, Altair, Jupyter, pytest, pyarrow. All free and open source; exact versions are
+pinned in `requirements.txt`.
 
 ## How to run (Windows PowerShell)
 
@@ -142,9 +160,22 @@ pip install -r requirements.txt
 python -m src.build_database                            # clean data + build DuckDB (~3 s)
 python -m pytest                                        # integrity tests
 python -m src.run_sql sql/03_discount_impact_by_category.sql   # run any query
+streamlit run streamlit_app.py                          # dashboard at http://localhost:8501
 ```
 
 On macOS/Linux, activate with `source .venv/bin/activate`.
+
+### Deploy the dashboard on Streamlit Community Cloud (free)
+
+1. Sign in at [share.streamlit.io](https://share.streamlit.io) with the GitHub account that
+   owns this repo, and allow Streamlit access to it.
+2. Click **Create app** → **Deploy a public app from GitHub**.
+3. Repository: `orelrubin2/superstore-profit-intelligence`, branch: `main`,
+   main file path: `streamlit_app.py`.
+4. Optional: choose an app URL (subdomain).
+5. Open **Advanced settings** and select **Python 3.12**. No secrets are needed.
+6. Click **Deploy**. The first start installs `requirements.txt` (a few minutes), then
+   builds the database and trains the model (about 15 seconds) on the first visit.
 
 ## Roadmap
 
@@ -154,7 +185,7 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 | 2. SQL business analysis | ✅ Done |
 | 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | ✅ Done |
 | 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | ✅ Done |
-| 5. Streamlit dashboard | Planned |
+| 5. Streamlit dashboard | ✅ Done |
 | 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | Planned |
 
 **Future ideas:** a monthly sales forecast.

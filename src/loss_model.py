@@ -58,6 +58,12 @@ CV_FOLDS = [([2014], 2015), ([2014, 2015], 2016)]   # expanding windows inside t
 HIGH_DISCOUNT = 0.20
 RANDOM_STATE = 42
 
+# Chosen in notebooks/04_loss_risk_model.ipynb with tune() and tune_baseline_b() on the
+# expanding-window folds (training years only). The dashboard reuses them so it runs
+# exactly the model whose 2017 test results the notebook reports.
+TUNED_FOREST_PARAMS = {"max_depth": 16, "min_samples_leaf": 1, "class_weight": "balanced_subsample"}
+TUNED_B_THRESHOLD = 0.5
+
 LINES_SQL = f"""
     SELECT row_id, order_id, order_year, sales, profit, {', '.join(FEATURES)}, {TARGET}
     FROM orders_clean
@@ -288,20 +294,37 @@ def original_feature(column: str) -> str:
     raise ValueError(f"unknown column {column}")
 
 
+def make_explainer(forest: Pipeline):
+    """SHAP TreeExplainer for the forest inside the pipeline."""
+    import shap
+
+    return shap.TreeExplainer(forest.named_steps["model"])
+
+
+def explain(forest: Pipeline, lines: pd.DataFrame, explainer=None) -> tuple[float, pd.DataFrame]:
+    """Base value and per-feature SHAP values of the loss class for each line.
+
+    base + the row sum of the per-feature values = the predicted loss probability.
+    One-hot columns are summed back into their original feature.
+    """
+    explainer = explainer or make_explainer(forest)
+    prep = forest.named_steps["prep"]
+    x = pd.DataFrame(prep.transform(lines[FEATURES]), columns=prep.get_feature_names_out())
+    values = explainer.shap_values(x, check_additivity=False)
+    values = values[:, :, 1] if np.ndim(values) == 3 else values[1]
+    base = explainer.expected_value
+    base = float(base[1] if np.ndim(base) else base)
+    per_column = pd.DataFrame(values, columns=x.columns, index=lines.index)
+    return base, per_column.T.groupby(original_feature).sum().T
+
+
 def grouped_shap(forest: Pipeline, lines: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """SHAP values of the loss class, summed per original feature.
 
     Returns (per-line SHAP by feature, ranking by mean |SHAP|). Summing one-hot
     columns first means a feature like state is judged as one feature, not 49.
     """
-    import shap
-
-    prep, model = forest.named_steps["prep"], forest.named_steps["model"]
-    x = pd.DataFrame(prep.transform(lines[FEATURES]), columns=prep.get_feature_names_out())
-    values = shap.TreeExplainer(model).shap_values(x, check_additivity=False)
-    values = values[:, :, 1] if np.ndim(values) == 3 else values[1]
-    per_column = pd.DataFrame(values, columns=x.columns)
-    per_feature = per_column.T.groupby(original_feature).sum().T
+    _, per_feature = explain(forest, lines)
     ranking = (per_feature.abs().mean().sort_values(ascending=False)
                .rename("mean_abs_shap").reset_index().rename(columns={"index": "feature"}))
     return per_feature, ranking
