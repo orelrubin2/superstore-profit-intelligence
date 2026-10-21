@@ -1,3 +1,7 @@
+-- Business question: Within the Central region, which states give the high discounts
+--                    and account for the losses?
+-- Why we checked: Query 04 showed that Central gives the most high discounts
+--                 (27.68% of lines above 20%) and has the lowest margin (7.92%).
 -- Insight: Central's discount problem comes from just two states: Texas and Illinois.
 --          - They are the only Central states that give discounts at all (average
 --            37.02% and 39.00%); the other 11 states give almost none (0%-0.71%).
@@ -8,7 +12,7 @@
 --          - Texas is also Central's largest state by sales ($170,188), so the problem
 --            sits in one of the region's most important markets.
 --          This suggests discounts are set by state-level policy, not by product or
---          customer. Caveat: several states have very few order lines ( North Dakota: 7).
+--          customer. Caveat: several states have very few order lines (e.g. North Dakota: 7).
 -- Next: check whether the same pattern appears in other regions, and follow how
 --       sales and profit changed over time.
 SELECT

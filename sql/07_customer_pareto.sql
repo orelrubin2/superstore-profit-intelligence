@@ -2,7 +2,16 @@
 --                    and are some customers unprofitable?
 -- Why we checked: Queries 01-06 looked at products, discounts, regions and time.
 --                 The last view is the customer: is profit concentrated in a few customers?
--- Insight: ___
+-- Insight: Profit is highly concentrated, and about 1 in 5 customers loses money.
+--          - The top 10% of customers (80) generate 57.69% of total profit, and the
+--            top 20% generate 81.90%, a classic Pareto (80/20) pattern.
+--          - 155 of 793 customers (deciles 9-10) are unprofitable. Profitable customers
+--            earn 124.86% of total profit, and the unprofitable ones erase about a
+--            quarter of it (cumulative share falls from 124.86% back to 100%).
+--          - The bottom decile is not small: it bought $278,279, the third-largest
+--            sales of any decile, yet lost $65,754. These are big buyers that lose money.
+-- Hypothesis: the unprofitable customers buy mostly at high discounts (links to 03-05).
+-- Next: test this in the customer segmentation step (RFM) and the ML model.
 
 WITH customer_profit AS (
     -- Step 1: one row per customer with their total sales and profit
