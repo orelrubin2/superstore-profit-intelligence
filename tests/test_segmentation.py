@@ -5,14 +5,20 @@ Run from the project root (after `python -m src.build_database`):
 """
 
 import duckdb
+import numpy as np
 import pandas as pd
 import pytest
 
 from src.build_database import DB_PATH
 from src.segmentation import (
+    CLUSTER_FEATURES,
     SEGMENT_ORDER,
     SEGMENT_RULES,
+    check_cluster_table,
     check_rfm_table,
+    cluster_customers,
+    cluster_matrix,
+    name_main_clusters,
     percentile_score,
     rfm_segment,
 )
@@ -100,3 +106,45 @@ def test_every_segment_used(con):
     assert {name for name, _ in counts} == set(SEGMENT_ORDER)
     total = con.execute("SELECT COUNT(*) FROM customer_features").fetchone()[0]
     assert sum(n for _, n in counts) == total
+
+
+# ---------- K-Means ----------
+
+def test_cluster_matrix_is_logged_and_scaled():
+    """Skewed columns are log1p-transformed, then every column has mean 0 and std 1."""
+    df = pd.DataFrame({
+        "recency_days": [1, 10, 100, 1000],
+        "frequency": [1, 2, 4, 8],
+        "gross_sales": np.expm1([1.0, 2.0, 3.0, 4.0]),   # log1p gives 1, 2, 3, 4
+        "high_discount_gross_share": [0.0, 0.1, 0.5, 1.0],
+    })
+    x = cluster_matrix(df, CLUSTER_FEATURES)
+    np.testing.assert_allclose(x.mean(axis=0), 0, atol=1e-12)
+    np.testing.assert_allclose(x.std(axis=0), 1, atol=1e-12)
+    # log1p(gross_sales) is evenly spaced, so its z-scores are symmetric around 0
+    np.testing.assert_allclose(x[:, 2], -x[::-1, 2], atol=1e-9)
+
+
+def test_cluster_names_follow_profiles_not_label_numbers():
+    """Swapping K-Means label numbers does not change which customer gets which name."""
+    df = pd.DataFrame({
+        "gross_sales": [100, 120, 5000, 5200, 4000, 4100],
+        "high_discount_gross_share": [0.0, 0.0, 0.05, 0.02, 0.7, 0.8],
+    })
+    a = name_main_clusters(df, np.array([0, 0, 1, 1, 2, 2]))
+    b = name_main_clusters(df, np.array([2, 2, 0, 0, 1, 1]))
+    assert (a == b).all()
+    assert list(a) == ["Quiet, low volume"] * 2 + ["Active, regular"] * 2 + ["Active, heavy-discount"] * 2
+
+
+def test_cluster_table_valid(con):
+    """One row per customer, k named clusters each, every cluster above the minimum size."""
+    check_cluster_table(con)
+
+
+def test_clustering_is_reproducible(con):
+    """Refitting from customer_features gives exactly the stored clusters."""
+    features = con.sql("SELECT * FROM customer_features").df()
+    refit = cluster_customers(features).set_index("customer_id")
+    stored = con.sql("SELECT * FROM customer_clusters").df().set_index("customer_id")
+    assert (refit.loc[stored.index] == stored).all().all()

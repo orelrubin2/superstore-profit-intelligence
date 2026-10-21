@@ -20,6 +20,7 @@ Run a query file with `python -m src.run_sql sql/<file>.sql`.
 | `customer_features` | customer | 793 | step 3: RFM, profit, discounts, high-volume groups |
 | `customer_mix` | customer × dimension value | 17,050 | step 3: each customer's mix of discount bands, products, regions, states |
 | `customer_rfm` | customer | 793 | step 3: R, F, M scores (1-5) and R × F segment |
+| `customer_clusters` | customer | 793 | step 3: K-Means cluster (k=3) and no-discount contrast (k=2) |
 
 **Joins:** `fact_order_lines` → `dim_customer` on `customer_id`, `dim_product` on
 `product_id`, `dim_location` on `location_id`, `dim_date` on `order_date = date`
@@ -294,3 +295,14 @@ tied values always share a score; recency is inverted (5 = most recent). Like
 | Needs attention | R 3, F 1–3 |
 | Frequent, quiet lately | R 1–2, F 4–5 |
 | Infrequent, quiet lately | R 1–2, F 1–3 |
+
+## `customer_clusters`
+One row per customer (step 3). K-Means on log1p(recency, frequency, gross sales) and
+the high-discount gross-sales share, standardized; fixed seed. Clusters are named from
+their profiles, not K-Means label numbers. Full-history features: **not for step 4**.
+
+| Column | Type | Description |
+|---|---|---|
+| `customer_id` | VARCHAR | key to `customer_features` |
+| `cluster` | VARCHAR | main run, k=3: `Quiet, low volume`, `Active, regular` or `Active, heavy-discount` |
+| `cluster_contrast` | VARCHAR | contrast run without the discount feature, k=2: `Quiet` or `Active` |
