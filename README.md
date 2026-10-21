@@ -2,11 +2,14 @@
 
 An end-to-end retail analytics project on the Sample Superstore dataset (9,994 US
 order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL business
-analysis, and next machine learning, a dashboard and an AI query layer.
+analysis and customer segmentation; next come machine learning, a dashboard and an AI
+query layer.
 
 **Core business question: where does the company lose money, and how can it grow profit?**
 
-## Key findings (SQL analysis)
+## Key findings
+
+### SQL analysis (step 2)
 
 - **Discounts above 20% lose money in every category.** With no discount, no order lines
   lose money. Above 20%, 78%–100% of lines lose money, for a combined **−$135,364**:
@@ -40,6 +43,31 @@ Full walkthrough with every query, table and chart:
 [`notebooks/02_sql_findings.ipynb`](notebooks/02_sql_findings.ipynb).
 Data quality and cleaning: [`notebooks/01_data_quality.ipynb`](notebooks/01_data_quality.ipynb).
 
+### Customer segmentation (step 3)
+
+*Question: who are the high-volume customers that generate net losses, and how do they
+differ from profitable high-volume customers?* High-volume = top 25% of customers by
+gross sales (before discount); 43 of these 199 customers lose money in total (−$52,784).
+
+- **They are not smaller, newer or lapsing customers.** Their recency, tenure, frequency
+  and volume are close to those of profitable high-volume customers.
+- **73% of what they buy is discounted above 20%**, against 15%, and that discount mix
+  explains **78–93% of the profit gap**.
+- **They buy in high-discount states** (Texas, Ohio, Pennsylvania, Florida, North Carolina),
+  not in the West, and over-index on **Machines and Binders**.
+- **One deep discount usually decides it:** 25 of the 43 would be profitable without
+  their single worst order line, and 41 of those worst lines are discounted above 20%.
+- **RFM would rank half of them as top customers** (Champions or Loyal). K-Means with a
+  discount-behavior feature puts **91%** of them in one cluster; without that feature,
+  the clusters do not separate them at all.
+
+| Discount mix | Which segmentation finds them |
+|---|---|
+| ![Discount mix of loss-making vs profitable high-volume customers](reports/figures/03_02_discount_mix.png) | ![Loss rate by segment](reports/figures/03_05_segment_loss_rate.png) |
+
+Full analysis with methods, sensitivity checks and caveats:
+[`notebooks/03_customer_segmentation.ipynb`](notebooks/03_customer_segmentation.ipynb).
+
 ## Project structure
 
 ```
@@ -48,17 +76,23 @@ data/processed/        orders_clean.parquet + superstore.duckdb (built locally)
 src/cleaning.py        load, validate and clean the raw data; data-quality log
 src/build_database.py  DuckDB star schema + integrity checks
 src/run_sql.py         run any .sql file and print the result
+src/customer_features.py  customer-level RFM, discount, product and region features
+src/segmentation.py    RFM scoring, R x F segments, K-Means with k-selection checks
+src/customer_comparison.py  step 3 comparisons with bootstrap confidence intervals
 sql/01-07_*.sql        business queries, each with question + insight in its header
 sql/SCHEMA.md          every table, column and type in the database
-tests/                 pytest checks: unique keys, joins and totals reconcile with raw data
-notebooks/             01 data quality, 02 SQL findings
+tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation
+notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation
 reports/figures/       charts used in this README
 ```
 
 **Data model:** `fact_order_lines` with `dim_customer`, `dim_product`, `dim_location` and
-`dim_date`, plus a wide `orders_clean` table and an order-level `orders` view.
+`dim_date`, plus a wide `orders_clean` table and an order-level `orders` view. Step 3 adds
+customer-level tables: `customer_features`, `customer_mix`, `customer_rfm` and
+`customer_clusters`.
 
-**Tech stack:** Python 3.12, pandas, DuckDB (SQL), matplotlib, Jupyter, pytest, pyarrow.
+**Tech stack:** Python 3.12, pandas, DuckDB (SQL), scikit-learn, SciPy, matplotlib, Jupyter,
+pytest, pyarrow.
 All free and open source.
 
 ## How to run (Windows PowerShell)
@@ -83,7 +117,7 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 |---|---|
 | 1. Data cleaning and DuckDB database | ✅ Done |
 | 2. SQL business analysis | ✅ Done |
-| 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | In progress |
+| 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | ✅ Done |
 | 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | Planned |
 | 5. Streamlit dashboard | Planned |
 | 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | Planned |
