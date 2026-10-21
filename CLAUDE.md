@@ -3,7 +3,7 @@
 ## Project goal
 Portfolio project for Data Analyst roles. An end-to-end retail
 analytics project on the Sample Superstore dataset: data cleaning, SQL analysis,
-machine learning (profit-risk prediction and sales forecasting), an interactive
+customer segmentation, machine learning (loss-risk prediction), an interactive
 dashboard, and AI-assisted analysis via Claude Code, Agent Skills and an MCP server.
 
 Core business question: **Where does the company lose money, and how can it
@@ -53,7 +53,21 @@ Do not assume results in advance.
 ## Roadmap
 1. Data cleaning and a DuckDB database
 2. SQL business analysis (profitability, discounts, regions, customers)
-3. Deeper analysis: discount impact, RFM customer segmentation, cohorts
-4. ML: loss-risk classifier with SHAP explanations, monthly sales forecast
+3. Customer segmentation: RFM scoring and K-Means clustering
+   - Business question: "Who are our high-volume customers that generate net
+     losses, and how do they differ from profitable high-volume customers in
+     recency, frequency, discounts, products and regions?"
+4. ML: loss-risk classifier with Random Forest, compared with a simple discount
+   rule baseline and Logistic Regression; SHAP to rank the strongest predictors
+   (Random Forest's built-in importance is biased toward high-cardinality
+   features such as state)
+   - Business question: "Which features known at order time (e.g. product
+     category, region, ship mode, discount level) are the strongest predictors of
+     loss-making order lines, and can we flag high-risk transactions before
+     fulfillment better than a simple discount rule?"
 5. Streamlit dashboard
 6. AI layer: Agent Skills and an MCP server for querying the data with Claude
+
+## Future ideas
+Not on the roadmap; only if time allows after step 6.
+- Monthly sales forecast

@@ -9,7 +9,7 @@ Run a query file with `python -m src.run_sql sql/<file>.sql`.
 |---|---|---|---|
 | `orders_clean` | order line | 9,993 | most queries: every column in one wide table, no joins needed |
 | `fact_order_lines` | order line | 9,993 | star-schema queries, joined to the `dim_*` tables |
-| `orders` (view) | order | 5,009 | order-level questions: RFM, cohorts, basket size |
+| `orders` (view) | order | 5,009 | order-level questions: RFM, basket size |
 | `dim_customer` | customer | 793 | customer attributes |
 | `dim_product` | product_id | 1,862 | product attributes |
 | `dim_location` | location | 632 | geography |
@@ -17,6 +17,8 @@ Run a query file with `python -m src.run_sql sql/<file>.sql`.
 | `product_name_variants` | product_id + name | 64 | the 32 ids with two names |
 | `data_quality_log` | cleaning check | 12 | what the cleaning changed |
 | `dropped_rows` | dropped row | 1 | row_id removed as a duplicate |
+| `customer_features` | customer | 793 | step 3: RFM, profit, discounts, high-volume groups |
+| `customer_mix` | customer × dimension value | 17,050 | step 3: each customer's mix of discount bands, products, regions, states |
 
 **Joins:** `fact_order_lines` → `dim_customer` on `customer_id`, `dim_product` on
 `product_id`, `dim_location` on `location_id`, `dim_date` on `order_date = date`
@@ -201,3 +203,68 @@ The 32 `product_id`s that appear with two names (64 rows).
 | Column | Type | Description |
 |---|---|---|
 | `row_id` | BIGINT | raw row removed as a near-duplicate (3407) |
+
+---
+
+## `customer_features`
+One row per customer, built from `orders_clean` (step 3). **Every column summarizes
+the customer's full 2014–2017 history: do not use them as features in the step 4
+order-line model (leakage).** Reference date = last order date in the data + 1 day
+(2017-12-31).
+
+| Column | Type | Description |
+|---|---|---|
+| `customer_id` | VARCHAR | customer identifier; primary key |
+| `customer_name` | VARCHAR | customer full name |
+| `segment` | VARCHAR | Consumer, Corporate or Home Office |
+| `first_order_date` | TIMESTAMP | first order date |
+| `last_order_date` | TIMESTAMP | last order date |
+| `recency_days` | BIGINT | days from last order to the reference date (R) |
+| `tenure_days` | BIGINT | days from first order to the reference date |
+| `frequency` | BIGINT | number of distinct orders (F) |
+| `order_lines` | BIGINT | number of order lines |
+| `quantity` | HUGEINT | total units |
+| `sales` | DOUBLE | total revenue after discount (M) |
+| `gross_sales` | DOUBLE | total revenue before discount (assumption); defines high-volume |
+| `profit` | DOUBLE | total profit; negative = net loss |
+| `profit_margin` | DOUBLE | `profit / sales` |
+| `avg_discount` | DOUBLE | mean discount over the customer's lines |
+| `high_discount_line_share` | DOUBLE | share of lines with discount > 20% |
+| `high_discount_gross_share` | DOUBLE | share of gross sales with discount > 20% |
+| `loss_lines` | BIGINT | number of loss-making lines |
+| `worst_line_profit` | DOUBLE | profit of the customer's worst line |
+| `worst_line_share_of_losses` | DOUBLE | worst line's share of all line-level losses (1 = one line explains all losses); NULL if no loss lines |
+| `is_high_volume` | BOOLEAN | `gross_sales` at or above the 75th percentile of customers |
+| `is_net_loss` | BOOLEAN | `profit < 0` |
+| `is_near_zero_profit` | BOOLEAN | \|profit\| < $100 (sensitivity check) |
+| `volume_group` | VARCHAR | `HV-loss`, `HV-profit` or `Other` |
+| `hv_gross_p80` | BOOLEAN | sensitivity: gross sales at or above the 80th percentile |
+| `hv_net_sales_p75` | BOOLEAN | sensitivity: net sales at or above the 75th percentile |
+| `hv_quantity_p75` | BOOLEAN | sensitivity: quantity at or above the 75th percentile (ties included) |
+
+## `customer_mix`
+One row per customer and value of five dimensions. Use it to compare *what* and
+*where* customers buy. Filter on `dimension` first.
+
+| Column | Type | Description |
+|---|---|---|
+| `customer_id` | VARCHAR | key to `customer_features` |
+| `dimension` | VARCHAR | `discount_band`, `category`, `sub_category`, `region` or `state` |
+| `value` | VARCHAR | the value within that dimension, e.g. `Tables` or `Texas` |
+| `order_lines` | BIGINT | the customer's lines with this value |
+| `gross_sales` | DOUBLE | gross sales of those lines (assumption) |
+| `sales` | DOUBLE | net sales of those lines |
+| `profit` | DOUBLE | profit of those lines |
+| `gross_share` | DOUBLE | share of the customer's gross sales; sums to 1 per customer and dimension |
+
+Example: average share of gross sales shipped to Texas, by volume group
+(customers with no Texas lines count as 0):
+
+```sql
+SELECT f.volume_group,
+       AVG(COALESCE(m.gross_share, 0)) AS avg_texas_share
+FROM customer_features AS f
+LEFT JOIN customer_mix AS m
+       ON m.customer_id = f.customer_id AND m.dimension = 'state' AND m.value = 'Texas'
+GROUP BY f.volume_group;
+```

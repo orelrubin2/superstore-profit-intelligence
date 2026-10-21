@@ -83,10 +83,12 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 |---|---|
 | 1. Data cleaning and DuckDB database | ✅ Done |
 | 2. SQL business analysis | ✅ Done |
-| 3. Deeper analysis: discount impact, RFM segmentation, cohorts | Planned |
-| 4. ML: loss-risk classifier with SHAP explanations, monthly sales forecast | Planned |
+| 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | In progress |
+| 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | Planned |
 | 5. Streamlit dashboard | Planned |
 | 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | Planned |
+
+**Future ideas:** a monthly sales forecast.
 
 ## How I worked with AI
 

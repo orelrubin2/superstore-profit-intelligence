@@ -9,7 +9,10 @@ Tables created in data/processed/superstore.duckdb:
     dim_date               calendar covering all order and ship dates
     product_name_variants  the product_ids that have more than one name
     data_quality_log       every cleaning check and the action taken
-    orders (view)          one row per order, for RFM and cohort analysis
+    orders (view)          one row per order, for RFM analysis
+    customer_features      one row per customer: RFM, profit, discounts, groups
+    customer_mix           customer x discount band / category / sub-category /
+                           region / state, with gross-sales shares
 
 Run from the project root:
     python -m src.build_database
@@ -21,6 +24,7 @@ import duckdb
 import pandas as pd
 
 from src.cleaning import RAW_PATH, clean_superstore, load_raw
+from src.customer_features import check_customer_tables, create_customer_tables
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
@@ -278,7 +282,9 @@ def build_database(db_path: Path = DB_PATH, parquet_path: Path = PARQUET_PATH) -
     with duckdb.connect(str(db_path)) as con:
         write_tables(con, tables)
         con.execute(ORDERS_VIEW_SQL)
+        create_customer_tables(con)
         run_checks(con)
+        check_customer_tables(con)
         summary = con.execute("""
             SELECT table_name, estimated_size AS rows
             FROM duckdb_tables() ORDER BY table_name
