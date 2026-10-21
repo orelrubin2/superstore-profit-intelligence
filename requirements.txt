@@ -6,3 +6,4 @@ duckdb
 scikit-learn
 jupyter
 ipykernel
+pyarrow
