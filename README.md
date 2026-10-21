@@ -61,6 +61,13 @@ gross sales (before discount); 43 of these 199 customers lose money in total (âˆ
   discount-behavior feature puts **91%** of them in one cluster; without that feature,
   the clusters do not separate them at all.
 
+**Recommendation** *(an inference from these results, not a tested finding)*: the problem is
+how large orders are priced in specific states, not which customers the company serves.
+A discount cap or approval step for deep discounts on Machines and Binders in the
+high-discount states would target exactly the lines that turn good customers into
+loss-makers. Its real effect (e.g. whether customers still buy without the discount) would
+need a pilot or A/B test.
+
 | Discount mix | Which segmentation finds them |
 |---|---|
 | ![Discount mix of loss-making vs profitable high-volume customers](reports/figures/03_02_discount_mix.png) | ![Loss rate by segment](reports/figures/03_05_segment_loss_rate.png) |
