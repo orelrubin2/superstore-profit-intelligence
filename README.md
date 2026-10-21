@@ -191,14 +191,14 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 
 ## Roadmap
 
-| Step | Status |
-|---|---|
-| 1. Data cleaning and DuckDB database | ✅ Done |
-| 2. SQL business analysis | ✅ Done |
-| 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | ✅ Done |
-| 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | ✅ Done |
-| 5. Streamlit dashboard | ✅ Done |
-| 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | ✅ Done |
+| Step |
+|---|
+| 1. Data cleaning and DuckDB database |
+| 2. SQL business analysis |
+| 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers |
+| 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP |
+| 5. Streamlit dashboard | 
+| 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | 
 
 **Future ideas:** a monthly sales forecast.
 
