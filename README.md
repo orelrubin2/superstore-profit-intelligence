@@ -223,9 +223,9 @@ loads them automatically, or you can invoke them by name:
 
 | Skill | Use it for |
 |---|---|
-| `profit-drilldown` | "Where does Furniture in the East lose money?" — the standard category → sub-category → discount → state → customer drill-down |
+| `profit-drilldown` | "Where does Furniture in the East lose money?" -the standard category → sub-category → discount → state → customer drill-down |
 | `sql-review` | review a `sql/*.sql` file: conventions, a live run, and a check of every number in its header |
-| `loss-risk-check` | "Is 10 binders to Texas at 30% off risky?" — model risk, rules, factors, a safer alternative |
+| `loss-risk-check` | "Is 10 binders to Texas at 30% off risky?" -model risk, rules, factors, a safer alternative |
 | `verify-project` | rebuild, run all tests, and re-check the README's key numbers |
 
 **Set up (Windows PowerShell, from the project root):**
