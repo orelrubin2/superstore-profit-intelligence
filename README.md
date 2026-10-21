@@ -104,6 +104,10 @@ first control and the model only to review lines discounted 1–20%.
 
 Full analysis: [`notebooks/04_loss_risk_model.ipynb`](notebooks/04_loss_risk_model.ipynb).
 
+## Project flow
+
+![Project flow: stages 0-6 with the key decisions and the result of each](reports/figures/project_flow.png)
+
 ## Interactive dashboard (step 5)
 
 A three-page Streamlit app built from the same tested code as the notebooks:
