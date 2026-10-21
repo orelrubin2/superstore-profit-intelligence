@@ -2,7 +2,7 @@
 
 An end-to-end retail analytics project on the Sample Superstore dataset (9,994 US
 order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL business
-analysis and customer segmentation; next come machine learning, a dashboard and an AI
+analysis, customer segmentation and a loss-risk model; next come a dashboard and an AI
 query layer.
 
 **Core business question: where does the company lose money, and how can it grow profit?**
@@ -75,6 +75,32 @@ need a pilot or A/B test.
 Full analysis with methods, sensitivity checks and caveats:
 [`notebooks/03_customer_segmentation.ipynb`](notebooks/03_customer_segmentation.ipynb).
 
+### Loss-risk model (step 4)
+
+*Question: which features known at order time best predict loss-making order lines, and
+can we flag them before fulfillment better than a simple discount rule?* Trained on
+2014–2016, tested once on 2017; no customer-history features (they would leak the future).
+
+- **Discount is by far the strongest predictor**, then sub-category and state, then
+  category and list price. Ship mode, customer segment, order month and quantity add
+  almost nothing (SHAP, confirmed by permutation importance).
+- **The discount rule is hard to beat in dollars.** "Flag if discount > 20%" catches
+  **89% of 2017 loss dollars** with 455 flags, 98% of them correct; at that budget the
+  models flag nearly the same lines and catch the same 89%.
+- **The models win where the rule is blind.** PR-AUC: rule 0.75, rule + sub-category 0.92,
+  Logistic Regression 0.95, **Random Forest 0.96**. In the 1–20% discount band the Random
+  Forest clearly beats the two-variable rule (PR-AUC 0.56 vs. 0.42, paired 95% CI for the
+  difference +0.09 to +0.20), but that band holds only ~11% of 2017 loss dollars.
+
+**Recommendation** *(an inference, not a tested finding)*: use the discount rule as the
+first control and the model only to review lines discounted 1–20%.
+
+| Loss dollars caught vs. lines flagged | Strongest predictors (SHAP) |
+|---|---|
+| ![Loss dollars caught by flag budget](reports/figures/04_02_loss_dollars_by_budget.png) | ![SHAP ranking](reports/figures/04_03_shap_ranking.png) |
+
+Full analysis: [`notebooks/04_loss_risk_model.ipynb`](notebooks/04_loss_risk_model.ipynb).
+
 ## Project structure
 
 ```
@@ -86,10 +112,12 @@ src/run_sql.py         run any .sql file and print the result
 src/customer_features.py  customer-level RFM, discount, product and region features
 src/segmentation.py    RFM scoring, R x F segments, K-Means with k-selection checks
 src/customer_comparison.py  step 3 comparisons with bootstrap confidence intervals
+src/loss_model.py      step 4 baselines, Logistic Regression, Random Forest, SHAP
 sql/01-07_*.sql        business queries, each with question + insight in its header
 sql/SCHEMA.md          every table, column and type in the database
 tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation
-notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation
+notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation,
+                       04 loss-risk model
 reports/figures/       charts used in this README
 ```
 
@@ -98,8 +126,8 @@ reports/figures/       charts used in this README
 customer-level tables: `customer_features`, `customer_mix`, `customer_rfm` and
 `customer_clusters`.
 
-**Tech stack:** Python 3.12, pandas, DuckDB (SQL), scikit-learn, SciPy, matplotlib, Jupyter,
-pytest, pyarrow.
+**Tech stack:** Python 3.12, pandas, DuckDB (SQL), scikit-learn, SHAP, SciPy, matplotlib,
+Jupyter, pytest, pyarrow.
 All free and open source.
 
 ## How to run (Windows PowerShell)
@@ -125,7 +153,7 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 | 1. Data cleaning and DuckDB database | ✅ Done |
 | 2. SQL business analysis | ✅ Done |
 | 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | ✅ Done |
-| 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | Planned |
+| 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | ✅ Done |
 | 5. Streamlit dashboard | Planned |
 | 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | Planned |
 

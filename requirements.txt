@@ -9,3 +9,4 @@ ipykernel
 pyarrow
 pytest
 scipy
+shap
