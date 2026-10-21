@@ -249,11 +249,6 @@ I led the project and used Claude as a collaborator for both thinking and execut
   this repository, no assumed results), reviewed and approved each plan, chose
   which direction to take after each result, and checked every number and insight
   against the query output before committing.
-- **Claude as an analysis partner:** we developed the drill-down together
-  (category, sub-category, discount, region, state, time, customers). Claude
-  proposed next questions and drafted queries 03-07, including the more advanced
-  SQL (window functions, `LAG`, CTEs, `NTILE`), with explanations. I wrote the early
-  queries (01-02) myself, and I ran, verified and interpreted all seven.
 - **Claude Code as a pair programmer:** it built the pipeline under my review:
   cleaning, the DuckDB schema, integrity tests, the `run_sql` runner and the notebooks.
 
