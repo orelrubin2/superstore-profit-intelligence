@@ -8,6 +8,10 @@ order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL bu
 analysis, customer segmentation, a loss-risk model, an interactive Streamlit dashboard,
 and an AI layer (an MCP server and Agent Skills) that lets Claude query the data.
 
+<p align="center">
+  <img src="reports/figures/star_schema.png" alt="Star schema: one fact table of order lines joined to four dimension tables" width="600">
+</p>
+
 **Core business question: where does the company lose money, and how can it grow profit?**
 
 ## Key findings
