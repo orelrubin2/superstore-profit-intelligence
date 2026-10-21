@@ -15,6 +15,7 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_PATH = PROJECT_ROOT / "data" / "raw" / "superstore.csv"
 
+RAW_ENCODING = "cp1252"
 EXPECTED_RAW_ROWS = 9_994
 DATE_FORMAT = "%m/%d/%Y"
 TEXT_COLUMNS = [
@@ -27,10 +28,14 @@ TEXT_COLUMNS = [
 def load_raw(path: Path = RAW_PATH) -> pd.DataFrame:
     """Read the raw CSV with the correct encoding and postal codes as text.
 
+    The file is Windows-1252 (cp1252), not latin-1: it contains cp1252 smart
+    quotes (bytes 0x93/0x94) that latin-1 decodes into invisible control
+    characters.
+
     Postal codes are identifiers, not numbers: reading them as integers drops
     the leading zero of New England codes (e.g. 02138 -> 2138).
     """
-    df = pd.read_csv(path, encoding="latin-1", dtype={"Postal Code": str})
+    df = pd.read_csv(path, encoding=RAW_ENCODING, dtype={"Postal Code": str})
     df["Postal Code"] = df["Postal Code"].str.zfill(5)
     return df
 
@@ -47,22 +52,61 @@ def to_snake_case(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def log_cp1252_characters(df: pd.DataFrame, log: list[dict]) -> None:
+    """Log rows containing characters that exist in cp1252 but not in latin-1.
+
+    These rows (smart quotes such as “ and ”) are the evidence that the file
+    is Windows-1252. They are decoded correctly on read and not changed.
+    """
+    for col in TEXT_COLUMNS:
+        # Characters above U+00FF are the cp1252-only ones (bytes 0x80-0x9F).
+        mask = df[col].str.contains(r"[^\x00-\xff]", regex=True)
+        if mask.any():
+            log.append({
+                "check": "encoding_cp1252_characters",
+                "column": col,
+                "rows_affected": int(mask.sum()),
+                "action": "none needed; decoded correctly by reading as cp1252",
+            })
+
+
 def clean_text(df: pd.DataFrame, log: list[dict]) -> pd.DataFrame:
     """Replace non-breaking spaces with normal spaces and trim whitespace.
 
     Without this, the same product name can appear as two different strings
-    and split group-by results.
+    and split group-by results. Each fix is logged separately per column, plus
+    a total of rows changed.
     """
     df = df.copy()
     for col in TEXT_COLUMNS:
-        cleaned = df[col].str.replace("\xa0", " ", regex=False).str.strip()
-        changed = int((cleaned != df[col]).sum())
-        if changed:
+        original = df[col]
+        fixes = {
+            "text_non_breaking_space": (
+                original.str.contains("\xa0", regex=False),
+                "replaced non-breaking spaces with normal spaces",
+            ),
+            "text_edge_whitespace": (
+                original != original.str.strip(),
+                "trimmed leading/trailing whitespace",
+            ),
+        }
+        cleaned = original.str.replace("\xa0", " ", regex=False).str.strip()
+        changed = cleaned != original
+
+        for check, (mask, action) in fixes.items():
+            if mask.any():
+                log.append({
+                    "check": check,
+                    "column": col,
+                    "rows_affected": int(mask.sum()),
+                    "action": action,
+                })
+        if changed.any():
             log.append({
-                "check": "text_whitespace",
+                "check": "text_total_changed",
                 "column": col,
-                "rows_affected": changed,
-                "action": "replaced non-breaking spaces and trimmed whitespace",
+                "rows_affected": int(changed.sum()),
+                "action": "rows changed by any text fix (a row can match several)",
             })
         df[col] = cleaned
     return df
@@ -209,6 +253,7 @@ def clean_superstore(path: Path = RAW_PATH) -> tuple[pd.DataFrame, pd.DataFrame]
     })
 
     df = to_snake_case(raw)
+    log_cp1252_characters(df, log)
     df = clean_text(df, log)
     df = parse_dates(df)
     df = drop_near_duplicates(df, log)

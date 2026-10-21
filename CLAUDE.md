@@ -14,7 +14,8 @@ Do not assume results in advance.
 - File: `data/raw/superstore.csv` (US retail orders, Kaggle "Sample Superstore")
 - 9,994 rows, 21 columns, orders from 2014-01-03 to 2017-12-30
 - One row = one order line (a product within an order), not a whole order
-- Encoding: `latin-1` (read with `encoding="latin-1"`)
+- Encoding: Windows-1252 (read with `encoding="cp1252"`); latin-1 turns the
+  file's smart quotes (bytes 0x93/0x94) into invisible control characters
 - Dates (`Order Date`, `Ship Date`) are strings in M/D/YYYY format
 - Key columns: Order ID, Order Date, Ship Date, Ship Mode, Customer ID,
   Segment, Region, State, City, Category, Sub-Category, Product ID,
