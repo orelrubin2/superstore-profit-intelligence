@@ -234,13 +234,18 @@ def predict_loss_risk(sub_category: str, state: str, discount: float, quantity: 
     with connect() as con:
         history = con.execute("""
             SELECT COUNT(*) AS lines, AVG(is_loss::INT) AS loss_share,
-                   (SELECT COUNT(*) FROM orders_clean WHERE state = ? AND discount = ?) AS state_lines
+                   (SELECT COUNT(*) FROM orders_clean WHERE state = ? AND discount = ?) AS state_lines,
+                   (SELECT COUNT(*) FROM orders_clean
+                    WHERE sub_category = ? AND discount = ?) AS sub_category_lines
             FROM orders_clean WHERE sub_category = ? AND state = ? AND discount = ?
-        """, [state, discount, sub_category, state, discount]).fetchone()
+        """, [state, discount, sub_category, discount, sub_category, state, discount]).fetchone()
     warnings = []
     if history[2] == 0:
         warnings.append(f"{state} never sold anything at a {discount:.0%} discount in 2014-2017; "
                         "the model has no direct evidence for this combination.")
+    if history[3] == 0:
+        warnings.append(f"{sub_category} were never sold at a {discount:.0%} discount in any state "
+                        "in 2014-2017; the model has no direct evidence for this combination.")
     observed = sorted(train["discount"].unique())
     if not any(abs(discount - d) < 1e-9 for d in observed):
         warnings.append(f"{discount:.0%} is not one of the discount levels in the data: {observed}.")

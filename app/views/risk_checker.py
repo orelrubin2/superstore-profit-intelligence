@@ -82,11 +82,18 @@ def render() -> None:
     similar = lines[(lines["sub_category"] == sub_category) & (lines["state"] == state)
                     & (lines["discount"] == discount)]
     state_discount_seen = ((lines["state"] == state) & (lines["discount"] == discount)).any()
+    sub_category_discount_seen = ((lines["sub_category"] == sub_category)
+                                  & (lines["discount"] == discount)).any()
     if not state_discount_seen:
         st.info(f"{state} never sold anything at a {discount:.0%} discount in 2014-2017, so the model "
                 "has no direct evidence for this combination; treat the prediction with caution.")
-    elif similar.empty:
-        st.caption(f"No past {sub_category} lines in {state} at {discount:.0%} discount.")
+    if not sub_category_discount_seen:
+        st.info(f"{sub_category} were never sold at a {discount:.0%} discount in any state in "
+                "2014-2017, so the model has no direct evidence for this combination; treat the "
+                "prediction with caution.")
+    if similar.empty:
+        if state_discount_seen and sub_category_discount_seen:
+            st.caption(f"No past {sub_category} lines in {state} at {discount:.0%} discount.")
     else:
         st.caption(f"In 2014-2017, {len(similar)} {sub_category} line(s) in {state} at {discount:.0%} "
                    f"discount were sold; {pct(similar['is_loss'].mean(), 0)} of them lost money.")

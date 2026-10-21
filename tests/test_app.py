@@ -94,6 +94,15 @@ def test_risk_checker_page():
     assert values["Rule A: discount > 20%"] == "No flag"     # default discount is 20%
 
 
+def test_risk_checker_warns_on_unseen_sub_category_discount():
+    """Binders (the default) were never sold at a 30% discount, so the page says so."""
+    at = run_page("risk_checker")
+    assert not any("Binders were never sold" in i.value for i in at.info)   # default 20%
+    at.select_slider[0].set_value(0.3).run()
+    assert not at.exception
+    assert any("Binders were never sold at a 30% discount" in i.value for i in at.info)
+
+
 def test_explanation_adds_up_to_prediction():
     """Base value + SHAP contributions equals the model's predicted probability."""
     import src.loss_model as lm

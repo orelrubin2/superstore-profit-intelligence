@@ -126,6 +126,14 @@ def test_predict_loss_risk_warnings_and_errors():
         server.predict_loss_risk("Binders", "Texas", 30, 1)    # percent instead of fraction
 
 
+def test_predict_loss_risk_warns_on_unseen_sub_category_discount():
+    """Binders were never sold at 30% anywhere, but were sold at 80% (in Texas, among others)."""
+    unseen = server.predict_loss_risk("Binders", "Texas", 0.3, 10)
+    assert any("Binders were never sold at a 30% discount" in w for w in unseen["warnings"])
+    seen = server.predict_loss_risk("Binders", "Texas", 0.8, 10)
+    assert not any("Binders were never sold" in w for w in seen["warnings"])
+
+
 # ---------- protocol ----------
 
 def test_server_over_stdio():
