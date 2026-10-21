@@ -13,6 +13,7 @@ Tables created in data/processed/superstore.duckdb:
     customer_features      one row per customer: RFM, profit, discounts, groups
     customer_mix           customer x discount band / category / sub-category /
                            region / state, with gross-sales shares
+    customer_rfm           one row per customer: R, F, M scores and R x F segment
 
 Run from the project root:
     python -m src.build_database
@@ -25,6 +26,7 @@ import pandas as pd
 
 from src.cleaning import RAW_PATH, clean_superstore, load_raw
 from src.customer_features import check_customer_tables, create_customer_tables
+from src.segmentation import check_rfm_table, create_rfm_table
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
@@ -283,8 +285,10 @@ def build_database(db_path: Path = DB_PATH, parquet_path: Path = PARQUET_PATH) -
         write_tables(con, tables)
         con.execute(ORDERS_VIEW_SQL)
         create_customer_tables(con)
+        create_rfm_table(con)
         run_checks(con)
         check_customer_tables(con)
+        check_rfm_table(con)
         summary = con.execute("""
             SELECT table_name, estimated_size AS rows
             FROM duckdb_tables() ORDER BY table_name

@@ -19,6 +19,7 @@ Run a query file with `python -m src.run_sql sql/<file>.sql`.
 | `dropped_rows` | dropped row | 1 | row_id removed as a duplicate |
 | `customer_features` | customer | 793 | step 3: RFM, profit, discounts, high-volume groups |
 | `customer_mix` | customer × dimension value | 17,050 | step 3: each customer's mix of discount bands, products, regions, states |
+| `customer_rfm` | customer | 793 | step 3: R, F, M scores (1-5) and R × F segment |
 
 **Joins:** `fact_order_lines` → `dim_customer` on `customer_id`, `dim_product` on
 `product_id`, `dim_location` on `location_id`, `dim_date` on `order_date = date`
@@ -268,3 +269,28 @@ LEFT JOIN customer_mix AS m
        ON m.customer_id = f.customer_id AND m.dimension = 'state' AND m.value = 'Texas'
 GROUP BY f.volume_group;
 ```
+
+## `customer_rfm`
+One row per customer (step 3). Scores are `ceil(5 × average-rank percentile)`, so
+tied values always share a score; recency is inverted (5 = most recent). Like
+`customer_features`, these summarize full history: **not for step 4 features**.
+
+| Column | Type | Description |
+|---|---|---|
+| `customer_id` | VARCHAR | key to `customer_features` |
+| `recency_days` | BIGINT | copied from `customer_features` |
+| `frequency` | BIGINT | copied from `customer_features` |
+| `sales` | DOUBLE | copied from `customer_features` (Monetary) |
+| `r_score` | BIGINT | 1–5; 5 = 1–27 days, 1 = 226+ days since last order |
+| `f_score` | BIGINT | 1–5; 1 = 1–4 orders, 2 = 5, 3 = 6, 4 = 7–8, 5 = 9+ |
+| `m_score` | BIGINT | 1–5 by net sales; used for profiling, not in the segment grid |
+| `rfm_segment` | VARCHAR | R × F segment (see below) |
+
+| `rfm_segment` | Rule |
+|---|---|
+| Champions | R 4–5, F 4–5 |
+| Promising | R 4–5, F 1–3 |
+| Loyal | R 3, F 4–5 |
+| Needs attention | R 3, F 1–3 |
+| Frequent, quiet lately | R 1–2, F 4–5 |
+| Infrequent, quiet lately | R 1–2, F 1–3 |
