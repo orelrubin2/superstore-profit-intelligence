@@ -32,8 +32,11 @@ Do not assume results in advance.
 ## Environment
 - Windows, PowerShell, VS Code
 - Python 3.12 in a virtual environment: activate with `.venv\Scripts\Activate.ps1`
-- Dependencies are listed in `requirements.txt`. When adding a package,
-  install it inside `.venv` and add it to `requirements.txt`.
+- Dependencies are listed in `requirements.txt` with exact versions (it is also what
+  Streamlit Community Cloud installs for the live dashboard). When adding a package,
+  install it inside `.venv` and pin it in `requirements.txt`.
+- The MCP server's extra dependency lives in `requirements-mcp.txt` (it includes
+  `requirements.txt`), so the dashboard's install stays unchanged.
 
 ## Conventions
 - Use relative paths from the project root (e.g. with `pathlib`), never

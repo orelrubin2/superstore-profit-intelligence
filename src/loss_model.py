@@ -348,3 +348,49 @@ def logistic_coefficients(logistic: Pipeline) -> pd.DataFrame:
     out = pd.DataFrame({"column": names, "feature": [original_feature(n) for n in names],
                         "coefficient": coef})
     return out.reindex(out["coefficient"].abs().sort_values(ascending=False).index).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------- final model for apps
+
+def train_final_model(con: duckdb.DuckDBPyConnection) -> dict:
+    """Train the evaluated step 4 model on 2014-2016 with the tuned settings.
+
+    Returns the forest, its SHAP explainer, Baseline B and the lookups needed to
+    turn a few user inputs into a full feature line. Used by the dashboard and
+    the MCP server (each caches the result).
+    """
+    lines = load_lines(con)
+    train, _ = split_by_year(lines)
+    forest = make_forest(**TUNED_FOREST_PARAMS).fit(train[FEATURES], train[TARGET])
+    return {
+        "forest": forest,
+        "explainer": make_explainer(forest),
+        "baseline_b": BaselineB(TUNED_B_THRESHOLD).fit(train),
+        "train": train,
+        "base_rate": float(train[TARGET].mean()),
+        "category_of": train.groupby("sub_category")["category"].first().to_dict(),
+        "region_of": train.groupby("state")["region"].first().to_dict(),
+        "median_price": train.groupby("sub_category")["unit_price"].median().to_dict(),
+        "default_ship_mode": train["ship_mode"].mode().iloc[0],
+        "default_segment": train["segment"].mode().iloc[0],
+        "default_month": int(train["order_month"].mode().iloc[0]),
+    }
+
+
+def build_line(model: dict, sub_category: str, state: str, discount: float, quantity: int,
+               unit_price: float | None = None, ship_mode: str | None = None,
+               segment: str | None = None, order_month: int | None = None) -> pd.DataFrame:
+    """One order line in the model's feature format.
+
+    Category and region are derived from sub-category and state; optional inputs
+    default to the sub-category's median list price and the most common values.
+    """
+    return pd.DataFrame([{
+        "category": model["category_of"][sub_category], "sub_category": sub_category,
+        "region": model["region_of"][state], "state": state,
+        "ship_mode": ship_mode or model["default_ship_mode"],
+        "segment": segment or model["default_segment"],
+        "order_month": str(order_month or model["default_month"]),
+        "discount": float(discount), "quantity": int(quantity),
+        "unit_price": float(unit_price if unit_price is not None else model["median_price"][sub_category]),
+    }])

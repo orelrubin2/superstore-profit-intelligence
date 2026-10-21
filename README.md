@@ -5,8 +5,8 @@
 
 An end-to-end retail analytics project on the Sample Superstore dataset (9,994 US
 order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL business
-analysis, customer segmentation, a loss-risk model and an interactive Streamlit
-dashboard; next comes an AI query layer.
+analysis, customer segmentation, a loss-risk model, an interactive Streamlit dashboard,
+and an AI layer (an MCP server and Agent Skills) that lets Claude query the data.
 
 **Core business question: where does the company lose money, and how can it grow profit?**
 
@@ -133,10 +133,14 @@ src/loss_model.py      step 4 baselines, Logistic Regression, Random Forest, SHA
 streamlit_app.py       dashboard entry point (page navigation)
 app/data.py            cached database build, table loaders and model training
 app/views/             dashboard pages: overview, customers, risk_checker
+src/mcp_server.py      MCP server: read-only SQL, schema, saved queries, loss-risk model
+.mcp.json              registers the MCP server with Claude Code for this project
+.claude/skills/        Agent Skills: profit-drilldown, sql-review, loss-risk-check, verify-project
 sql/01-07_*.sql        business queries, each with question + insight in its header
 sql/SCHEMA.md          every table, column and type in the database
 tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation,
-                       leakage guards, dashboard pages (Streamlit AppTest)
+                       leakage guards, dashboard pages (Streamlit AppTest), MCP server
+                       safety and protocol
 notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation,
                        04 loss-risk model
 reports/figures/       charts used in this README
@@ -148,8 +152,9 @@ customer-level tables: `customer_features`, `customer_mix`, `customer_rfm` and
 `customer_clusters`.
 
 **Tech stack:** Python 3.12, pandas, DuckDB (SQL), scikit-learn, SHAP, SciPy, matplotlib,
-Streamlit, Altair, Jupyter, pytest, pyarrow. All free and open source; exact versions are
-pinned in `requirements.txt`.
+Streamlit, Altair, MCP Python SDK, Jupyter, pytest, pyarrow. All free and open source;
+exact versions are pinned in `requirements.txt` (dashboard and analysis) and
+`requirements-mcp.txt` (adds the MCP SDK, so the dashboard's install stays lean).
 
 ## How to run (Windows PowerShell)
 
@@ -189,9 +194,48 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 | 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers | ✅ Done |
 | 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP | ✅ Done |
 | 5. Streamlit dashboard | ✅ Done |
-| 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | Planned |
+| 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | ✅ Done |
 
 **Future ideas:** a monthly sales forecast.
+
+## AI layer: query the data with Claude (step 6)
+
+A local **MCP server** (`src/mcp_server.py`, stdio, no hosting) gives Claude Code direct,
+read-only access to the project's database and model:
+
+| Tool | What it does |
+|---|---|
+| `list_tables`, `describe_table` | the data model, with descriptions from `sql/SCHEMA.md` |
+| `run_sql` | one read-only `SELECT`, capped at 200 rows |
+| `list_saved_queries`, `run_saved_query` | the `sql/01–07` business queries: question, insight and live result |
+| `predict_loss_risk` | the step 4 model for one order line: risk, both discount rules, top SHAP factors, history |
+
+**Safety:** the DuckDB connection is read-only with external access disabled and its
+settings locked, so SQL cannot write, read or write files, attach databases or install
+extensions; on top of that, `run_sql` accepts exactly one `SELECT`. Tests try each of these.
+
+Four project **Agent Skills** (`.claude/skills/`) package recurring tasks; Claude Code
+loads them automatically, or you can invoke them by name:
+
+| Skill | Use it for |
+|---|---|
+| `profit-drilldown` | "Where does Furniture in the East lose money?" — the standard category → sub-category → discount → state → customer drill-down |
+| `sql-review` | review a `sql/*.sql` file: conventions, a live run, and a check of every number in its header |
+| `loss-risk-check` | "Is 10 binders to Texas at 30% off risky?" — model risk, rules, factors, a safer alternative |
+| `verify-project` | rebuild, run all tests, and re-check the README's key numbers |
+
+**Set up (Windows PowerShell, from the project root):**
+```powershell
+pip install -r requirements-mcp.txt     # adds the MCP SDK to the environment
+python -m src.build_database            # optional: the server builds it on first use
+claude                                  # start Claude Code; approve the "superstore" server when asked
+```
+`.mcp.json` registers the server for this project. On macOS/Linux, register it instead with
+`claude mcp add superstore -- .venv/bin/python -m src.mcp_server`.
+
+**Cost and privacy:** the server and SDK are free and run locally. Query results that Claude
+reads become part of the conversation, which is fine for this public dataset; review that
+before reusing the pattern with private data.
 
 ## How I worked with AI
 

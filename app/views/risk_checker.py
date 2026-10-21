@@ -14,17 +14,6 @@ FEATURE_LABELS = {"discount": "Discount", "sub_category": "Sub-category", "state
                   "order_month": "Order month"}
 
 
-def build_line(model: dict, sub_category: str, state: str, discount: float, quantity: int,
-               unit_price: float, ship_mode: str, segment: str, order_month: int) -> pd.DataFrame:
-    """One order line in the model's feature format; category and region are derived."""
-    return pd.DataFrame([{
-        "category": model["category_of"][sub_category], "sub_category": sub_category,
-        "region": model["region_of"][state], "state": state, "ship_mode": ship_mode,
-        "segment": segment, "order_month": str(order_month),
-        "discount": discount, "quantity": quantity, "unit_price": unit_price,
-    }])
-
-
 def describe(feature: str, line: pd.Series) -> str:
     """Readable 'Feature = value' label for the SHAP chart."""
     value = line[feature]
@@ -33,10 +22,6 @@ def describe(feature: str, line: pd.Series) -> str:
     elif feature == "unit_price":
         value = f"${value:,.2f}"
     return f"{FEATURE_LABELS[feature]} = {value}"
-
-
-def most_common(series: pd.Series):
-    return series.mode().iloc[0]
 
 
 def render() -> None:
@@ -65,13 +50,13 @@ def render() -> None:
                                      help="Default: median list price of this sub-category.")
         ship_modes = sorted(train["ship_mode"].unique())
         ship_mode = a2.selectbox("Ship mode", ship_modes,
-                                 index=ship_modes.index(most_common(train["ship_mode"])))
+                                 index=ship_modes.index(model["default_ship_mode"]))
         segments = sorted(train["segment"].unique())
-        segment = a3.selectbox("Segment", segments, index=segments.index(most_common(train["segment"])))
+        segment = a3.selectbox("Segment", segments, index=segments.index(model["default_segment"]))
         order_month = a4.selectbox("Order month", list(range(1, 13)),
-                                   index=int(most_common(train["order_month"])) - 1)
+                                   index=model["default_month"] - 1)
 
-    line = build_line(model, sub_category, state, discount, quantity, unit_price,
+    line = lm.build_line(model, sub_category, state, discount, quantity, unit_price,
                       ship_mode, segment, order_month)
     base, contributions = lm.explain(model["forest"], line, model["explainer"])
     risk = base + float(contributions.iloc[0].sum())

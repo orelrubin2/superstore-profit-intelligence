@@ -57,17 +57,4 @@ def discount_mix_by_group() -> pd.DataFrame:
 def load_model() -> dict:
     """The step 4 Random Forest and Baseline B, trained on 2014-2016, plus lookups."""
     with connect() as con:
-        lines = lm.load_lines(con)
-    train, _ = lm.split_by_year(lines)
-    forest = lm.make_forest(**lm.TUNED_FOREST_PARAMS).fit(train[lm.FEATURES], train[lm.TARGET])
-    baseline_b = lm.BaselineB(lm.TUNED_B_THRESHOLD).fit(train)
-    return {
-        "forest": forest,
-        "explainer": lm.make_explainer(forest),
-        "baseline_b": baseline_b,
-        "train": train,
-        "base_rate": float(train[lm.TARGET].mean()),
-        "category_of": train.groupby("sub_category")["category"].first().to_dict(),
-        "region_of": train.groupby("state")["region"].first().to_dict(),
-        "median_price": train.groupby("sub_category")["unit_price"].median().to_dict(),
-    }
+        return lm.train_final_model(con)

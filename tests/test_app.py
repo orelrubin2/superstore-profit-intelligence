@@ -98,10 +98,9 @@ def test_explanation_adds_up_to_prediction():
     """Base value + SHAP contributions equals the model's predicted probability."""
     import src.loss_model as lm
     from app import data
-    from app.views.risk_checker import build_line
 
     model = data.load_model()
-    line = build_line(model, "Binders", "Texas", 0.8, 3, 10.0, "Standard Class", "Consumer", 11)
+    line = lm.build_line(model, "Binders", "Texas", 0.8, 3, 10.0, "Standard Class", "Consumer", 11)
     base, contributions = lm.explain(model["forest"], line, model["explainer"])
     predicted = model["forest"].predict_proba(line[lm.FEATURES])[0, 1]
     assert np.isclose(base + contributions.iloc[0].sum(), predicted, atol=1e-6)
