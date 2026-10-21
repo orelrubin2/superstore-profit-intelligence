@@ -10,15 +10,6 @@ from app.style import BLUE, LOSS, money, pct
 HIGH_DISCOUNT = 0.20
 
 
-def filter_lines(lines: pd.DataFrame, categories, regions, states) -> pd.DataFrame:
-    """Keep lines matching every non-empty filter (an empty filter means 'all')."""
-    mask = pd.Series(True, index=lines.index)
-    for column, chosen in [("category", categories), ("region", regions), ("state", states)]:
-        if chosen:
-            mask &= lines[column].isin(chosen)
-    return lines[mask]
-
-
 def band_summary(lines: pd.DataFrame) -> pd.DataFrame:
     """Lines, sales, profit, margin and loss-line share per discount band."""
     out = (lines.groupby("discount_band")
@@ -41,7 +32,7 @@ def render() -> None:
     state_pool = lines[lines["region"].isin(regions)] if regions else lines
     states = c3.multiselect("State", sorted(state_pool["state"].unique()), placeholder="All states")
 
-    selected = filter_lines(lines, categories, regions, states)
+    selected = data.filter_lines(lines, category=categories, region=regions, state=states)
     if selected.empty:
         st.warning("No order lines match these filters.")
         return

@@ -10,12 +10,13 @@ loss-risk model; both are cached afterwards.
 
 import streamlit as st
 
-from app.views import customers, overview, risk_checker
+from app.views import customers, explore, overview, risk_checker
 
 st.set_page_config(page_title="Superstore Profit Intelligence", page_icon="📊", layout="wide")
 
 pages = st.navigation([
     st.Page(overview.render, title="Overview", url_path="overview", default=True),
+    st.Page(explore.render, title="Explore", url_path="explore"),
     st.Page(customers.render, title="Customers", url_path="customers"),
     st.Page(risk_checker.render, title="Loss-risk checker", url_path="risk-checker"),
 ])

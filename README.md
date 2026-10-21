@@ -110,11 +110,12 @@ Full analysis: [`notebooks/04_loss_risk_model.ipynb`](notebooks/04_loss_risk_mod
 
 ## Interactive dashboard (step 5)
 
-A three-page Streamlit app built from the same tested code as the notebooks:
+A four-page Streamlit app built from the same tested code as the notebooks:
 
 | Page | What it shows |
 |---|---|
 | **Overview** | sales, profit, margin and profit on >20%-discount lines, plus margin by discount band; filters for category, region and state |
+| **Explore** | KPI row (sales, profit, margin, orders, customers); US map by state (sales, profit or margin); top 10 cities; monthly trend by region; sales and profit by sub-category; sales by segment; filters for year, region, category and segment |
 | **Customers** | loss-making vs. profitable high-volume customers, their discount mix, and where they fall in the K-Means clusters |
 | **Loss-risk checker** | pick a sub-category, state, discount and quantity; get the model's predicted loss risk, what the two discount rules would say, how similar past lines turned out, and a SHAP explanation |
 

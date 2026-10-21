@@ -5,6 +5,12 @@ ORANGE = "#eb6834"    # categorical slot 2
 LOSS = "#e34948"      # loss pole of the blue <-> red diverging pair
 GREY = "#52514e"      # reference lines and secondary text
 BAND_COLORS = ["#86b6ef", "#3987e5", "#1c5cab", "#0d366b"]   # ordinal ramp, 0% -> >40%
+REGION_COLORS = {"Central": "#2a78d6", "East": "#eb6834",       # categorical slots 1-4,
+                 "South": "#1baf7a", "West": "#eda100"}         # fixed per region
+SEQUENTIAL = ["#cde2fb", "#0d366b"]                             # blue ramp, low -> high
+DIVERGING = [LOSS, "#f0efec", BLUE]                             # loss <- grey 0 -> profit
+SURFACE = "#fcfcfb"   # chart background; also the fill of states with no orders
+BORDER = "#c3c2b7"    # state outlines
 
 
 def money(value: float) -> str:

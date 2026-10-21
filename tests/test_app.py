@@ -76,6 +76,60 @@ def test_overview_filters(con):
     assert metric_values(at)["Profit"] == money(profit)
 
 
+def explore_kpis_sql(con, where: str = "TRUE") -> dict:
+    sales, profit, orders, customers = con.execute(f"""
+        SELECT SUM(sales), SUM(profit), COUNT(DISTINCT order_id), COUNT(DISTINCT customer_id)
+        FROM orders_clean WHERE {where}
+    """).fetchone()
+    return {"Sales": money(sales), "Profit": money(profit),
+            "Profit margin": f"{profit / sales * 100:.1f}%",
+            "Orders": f"{orders:,}", "Customers": f"{customers:,}"}
+
+
+def test_explore_matches_database(con):
+    """Unfiltered KPIs on the Explore page equal the SQL totals; every widget option renders."""
+    at = run_page("explore")
+    assert not at.exception
+    assert metric_values(at) == explore_kpis_sql(con)
+    for radio, options in [("map_metric", ["Profit", "Margin"]), ("city_rank", ["Profit"]),
+                           ("trend_measure", ["Profit"])]:
+        for option in options:
+            at.radio(key=radio).set_value(option).run()
+            assert not at.exception
+
+
+def test_explore_filters(con):
+    """Year + region + category + segment filters give the same KPIs as SQL."""
+    at = run_page("explore")
+    at.multiselect[0].set_value([2017]).run()
+    at.multiselect[1].set_value(["Central"]).run()
+    at.multiselect[2].set_value(["Furniture", "Technology"]).run()
+    at.multiselect[3].set_value(["Consumer"]).run()
+    assert not at.exception
+    assert metric_values(at) == explore_kpis_sql(con, """order_year = 2017 AND region = 'Central'
+        AND category IN ('Furniture', 'Technology') AND segment = 'Consumer'""")
+
+
+def test_explore_aggregations(con):
+    """Map covers every state; top cities match SQL, keyed by city + state."""
+    from app import data
+    from app.views import explore
+
+    lines = data.load_lines()
+    states = explore.by_state(lines)
+    assert len(states) == 49 and states["fips"].is_unique
+    for rank_by in ["sales", "profit"]:
+        expected = con.execute(f"""
+            SELECT city, state FROM orders_clean GROUP BY city, state
+            ORDER BY SUM({rank_by}) DESC LIMIT 10
+        """).fetchall()
+        got = explore.top_cities(lines, rank_by)
+        assert list(zip(got["city"], got["state"])) == expected
+    monthly = explore.monthly_by_region(lines)
+    assert len(monthly) == 48 * 4
+    assert abs(monthly["sales"].sum() - lines["sales"].sum()) < 0.01
+
+
 def test_customers_page(con):
     at = run_page("customers")
     assert not at.exception

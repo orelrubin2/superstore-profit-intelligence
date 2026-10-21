@@ -68,7 +68,7 @@ Do not assume results in advance.
      category, region, ship mode, discount level) are the strongest predictors of
      loss-making order lines, and can we flag high-risk transactions before
      fulfillment better than a simple discount rule?"
-5. Streamlit dashboard
+5. Streamlit dashboard (Overview, Explore, Customers, Loss-risk checker)
 6. AI layer: Agent Skills and an MCP server for querying the data with Claude
 
 ## Future ideas

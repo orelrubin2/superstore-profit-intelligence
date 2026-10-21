@@ -39,6 +39,15 @@ def load_lines() -> pd.DataFrame:
         return con.execute("SELECT * FROM orders_clean").df()
 
 
+def filter_lines(lines: pd.DataFrame, **chosen) -> pd.DataFrame:
+    """Keep lines matching every non-empty filter, e.g. region=["East"] (empty means 'all')."""
+    mask = pd.Series(True, index=lines.index)
+    for column, values in chosen.items():
+        if values:
+            mask &= lines[column].isin(values)
+    return lines[mask]
+
+
 @st.cache_data(show_spinner=False)
 def load_customers() -> pd.DataFrame:
     """Customer features joined with RFM segment and clusters (step 3)."""
