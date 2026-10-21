@@ -1,5 +1,8 @@
 # Superstore Profit Intelligence
 
+**Live demo:** [superstore-profit-intelligence-orel.streamlit.app](https://superstore-profit-intelligence-orel.streamlit.app/)
+(interactive dashboard; the first visit may take ~15 seconds while the app wakes up and builds its data)
+
 An end-to-end retail analytics project on the Sample Superstore dataset (9,994 US
 order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL business
 analysis, customer segmentation, a loss-risk model and an interactive Streamlit
