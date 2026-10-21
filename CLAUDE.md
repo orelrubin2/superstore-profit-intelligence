@@ -43,6 +43,12 @@ Do not assume results in advance.
 - Code and comments in English, with clear names and short docstrings
 - Use only free, open-source tools. No paid APIs or services.
 - Before large changes, explain the plan briefly and keep steps small
+- In step 2 (SQL business analysis) the user leads the SQL analysis: Claude may
+  propose questions and draft queries with explanations, but the user runs,
+  verifies and interprets every query before committing it
+- From step 3 on, the user proposes the analysis questions and the direction;
+  Claude may refine them, draft code and explain it, and the user verifies every
+  result before committing
 
 ## Roadmap
 1. Data cleaning and a DuckDB database
