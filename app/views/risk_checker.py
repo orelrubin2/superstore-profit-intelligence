@@ -7,7 +7,20 @@ import streamlit as st
 import src.loss_model as lm
 import src.profit_model as pm
 from app import data
-from app.style import BLUE, LOSS, TEXT, pct, signed_pp
+from app.style import BLUE, LOSS, MUTED, PAGE_CSS, TEXT, pct, signed_pp
+
+# On top of style.PAGE_CSS: slimmer alert boxes and 13.5 px body text, so inputs, results
+# and explanations fit (or nearly fit) one 1920x1080 screen.
+CHECKER_CSS = """
+<style>
+[data-testid="stAlertContainer"] { padding: 0.5rem 0.8rem; }
+[data-testid="stAlert"] p, [class*="st-key-explain"] p { font-size: 13.5px; line-height: 1.4; }
+[data-testid="stCaptionContainer"] p { font-size: 12.5px; }
+[data-testid="stExpander"] summary { padding: 0.3rem 0.7rem; }
+[data-testid="stExpander"] summary p { font-size: 13px; }
+</style>
+"""
+SHAP_HEIGHT = 185   # per SHAP bar chart (4 bars)
 
 FEATURE_LABELS = {"discount": "Discount", "sub_category": "Sub-category", "state": "State",
                   "category": "Category", "region": "Region", "unit_price": "List price",
@@ -39,15 +52,18 @@ def contribution_chart(shown: pd.DataFrame, x_title: str, color_if_positive: str
                        color_if_negative: str) -> alt.LayerChart:
     """Horizontal bars of per-feature contributions (in percentage points), labelled."""
     chart = (alt.Chart(shown)
-             .mark_bar(size=26, cornerRadiusEnd=4)
-             .encode(y=alt.Y("factor:N", sort=None, title=None),
+             .mark_bar(size=20, cornerRadiusEnd=4)
+             .encode(y=alt.Y("factor:N", sort=None, title=None,
+                             axis=alt.Axis(labelOverlap=False, labelLimit=180)),
                      x=alt.X("contribution:Q", title=x_title, axis=alt.Axis(format="+%")),
                      color=alt.condition("datum.contribution >= 0", alt.value(color_if_positive),
                                          alt.value(color_if_negative)),
                      tooltip=["factor:N", alt.Tooltip("contribution:Q", format="+.1%")]))
     labels = chart.mark_text(align="left", dx=4, fontSize=12).encode(
         text="label:N", color=alt.value(TEXT))
-    return (chart + labels).properties(height=200)
+    return ((chart + labels).properties(height=SHAP_HEIGHT)
+            .configure_axis(labelFontSize=11, titleFontSize=11, labelColor=MUTED,
+                            titleColor=MUTED, titleFontWeight="normal"))
 
 
 def top_contributions(row: pd.Series, line: pd.Series, n: int = 4) -> pd.DataFrame:
@@ -119,11 +135,11 @@ def disagreement_note(risk: float, profit: float, expected_error: float, stats: 
 
 
 def render() -> None:
+    st.markdown(PAGE_CSS + CHECKER_CSS, unsafe_allow_html=True)
     st.title("Will this order line make or lose money?")
-    st.caption("Two models, using only what is known when the order is placed, both trained on "
-               "2014-2016 and tested on 2017: the loss risk (Random Forest, PR-AUC 0.96; "
-               "notebooks/04_loss_risk_model.ipynb) and the profit forecast (margin x Sales "
-               "Random Forest; notebooks/05_profit_model.ipynb).")
+    st.caption("Two models using only what is known when the order is placed, trained on "
+               "2014-2016 and tested on 2017: loss risk (Random Forest, PR-AUC 0.96; notebook 04) "
+               "and profit forecast (margin x Sales Random Forest; notebook 05).")
     model = data.load_model()
     profit_model = data.load_profit_model()
     train = model["train"]
@@ -146,14 +162,15 @@ def render() -> None:
                                  format="%.2f", key=f"price_{sub_category}",
                                  help=price_range + " Prefilled with the median; enter the real "
                                       "list price per unit, before discount.")
-    st.caption(esc(price_range))
+    hint, advanced = st.columns([1, 1.25], vertical_alignment="center")
+    hint.caption(esc(price_range))
     if not prices["min"] <= unit_price <= prices["max"]:
         st.info(esc(f"{dollars(unit_price)} is outside the {sub_category} list prices seen in "
                     f"2014-2016 ({dollars(prices['min'])}-{dollars(prices['max'])}); both models "
                     "can only extrapolate, so treat the results with caution."))
 
-    with st.expander("Advanced: other inputs for the loss-risk model "
-                     "(defaults shown; they barely affect the prediction)"):
+    with advanced.expander("Advanced: other inputs for the loss-risk model "
+                           "(defaults shown; they barely affect the prediction)"):
         a1, a2, a3 = st.columns(3)
         ship_modes = sorted(train["ship_mode"].unique())
         ship_mode = a1.selectbox("Ship mode", ship_modes,
@@ -174,7 +191,23 @@ def render() -> None:
     profit = margin * sales
     band = pm.expected_error(profit_model["error_bands"], sales)
 
-    # ---- loss risk and the two rules
+    # ---- results: loss risk (left) and profit forecast (right), side by side
+    risk_side, profit_side = st.columns(2, gap="large")
+    with risk_side:
+        loss_risk_results(model, line, risk, discount, sub_category, state, lines)
+    with profit_side:
+        profit_results(profit_model, risk, profit, sales, margin, band, unit_price, quantity,
+                       discount, default_price, sub_category,
+                       risk_raisers(contributions.iloc[0], line.iloc[0]), model["base_rate"])
+
+    # ---- explanations
+    explanations(contributions, line, base, risk, margin_contributions, profit_line,
+                 margin_base, margin, sales, profit)
+
+
+def loss_risk_results(model: dict, line: pd.DataFrame, risk: float, discount: float,
+                      sub_category: str, state: str, lines: pd.DataFrame) -> None:
+    """Loss-risk metric, the two rules, the risk message and what happened to similar lines."""
     st.subheader("Loss risk")
     r1, r2, r3 = st.columns(3)
     r1.metric("Predicted loss risk", pct(risk, 0),
@@ -212,7 +245,12 @@ def render() -> None:
         st.caption(f"In 2014-2017, {len(similar)} {sub_category} line(s) in {state} at {discount:.0%} "
                    f"discount were sold; {pct(similar['is_loss'].mean(), 0)} of them lost money.")
 
-    # ---- profit forecast
+
+def profit_results(profit_model: dict, risk: float, profit: float, sales: float, margin: float,
+                   band: pd.Series, unit_price: float, quantity: int, discount: float,
+                   default_price: float, sub_category: str, raisers: list[str],
+                   base_rate: float) -> None:
+    """Predicted profit, Sales and margin, the expected error, and the two notes."""
     st.subheader("Profit forecast")
     p1, p2, p3 = st.columns(3)
     p1.metric("Predicted profit", dollars(profit))
@@ -231,40 +269,41 @@ def render() -> None:
             f"{dollars(profit_model['mae_default_price'])} per line, instead of "
             f"{dollars(profit_model['mae_real_price'])} with the real price."))
     note = disagreement_note(risk, profit, float(band["mae"]),
-                             profit_model.get("disagreement", {}), model["base_rate"],
-                             risk_raisers(contributions.iloc[0], line.iloc[0]))
+                             profit_model.get("disagreement", {}), base_rate, raisers)
     if note:
         st.info(esc(note))
 
-    # ---- explanations
+
+def explanations(contributions: pd.DataFrame, line: pd.DataFrame, base: float, risk: float,
+                 margin_contributions: pd.Series, profit_line: pd.DataFrame, margin_base: float,
+                 margin: float, sales: float, profit: float) -> None:
+    """The two SHAP charts side by side, each with a one-sentence reading."""
     st.subheader("Why these predictions")
-    left, right = st.columns(2)
+    left, right = st.columns(2, gap="large")
     row = contributions.iloc[0]
     shown = top_contributions(row, line.iloc[0])
-    with left:
-        st.markdown("**Loss risk**")
-        st.altair_chart(contribution_chart(shown, "Change in predicted loss risk", LOSS, BLUE),
+    with left, st.container(key="explain-risk"):
+        st.altair_chart(contribution_chart(shown, "Change in predicted loss risk (red pushes it "
+                                           "up, blue pulls it down)", LOSS, BLUE),
                         width="stretch")
         parts = [f"{describe(f, line.iloc[0]).lower()} ({signed_pp(v)})"
                  for f, v in zip(shown["feature"], shown["contribution"])]
         rest = float(row.drop(shown["feature"]).sum())
         st.markdown(
-            f"Starting from the average training line ({pct(base, 1)}), the biggest factors are "
-            + ", ".join(parts)
+            f"**Loss risk.** Starting from the average training line ({pct(base, 1)}), the biggest "
+            "factors are " + ", ".join(parts)
             + f". The other features together add {signed_pp(rest)}, giving {pct(risk, 0)}.")
-        st.caption("Red pushes the risk up, blue pulls it down.")
-    with right:
-        st.markdown("**Profit margin**")
+    with right, st.container(key="explain-margin"):
         margin_shown = top_contributions(margin_contributions, profit_line.iloc[0])
-        st.altair_chart(contribution_chart(margin_shown, "Change in predicted margin", BLUE, LOSS),
+        st.altair_chart(contribution_chart(margin_shown, "Change in predicted margin (blue raises "
+                                           "it, red lowers it)", BLUE, LOSS),
                         width="stretch")
         parts = [f"{describe(f, profit_line.iloc[0]).lower()} ({signed_pp(v)})"
                  for f, v in zip(margin_shown["feature"], margin_shown["contribution"])]
         st.markdown(esc(
-            f"Starting from the average training line's margin ({pct(margin_base, 1)}): "
-            + ", ".join(parts)
+            f"**Profit margin.** Starting from the average training line's margin "
+            f"({pct(margin_base, 1)}): " + ", ".join(parts)
             + f". Predicted margin {pct(margin)} x Sales {dollars(sales)} = "
               f"predicted profit {dollars(profit)}."))
-        st.caption("Blue raises the margin, red lowers it.")
     st.caption("Both charts show SHAP values from the Random Forests (one-hot columns summed per "
                "feature). The models show association, not cause.")

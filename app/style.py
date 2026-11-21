@@ -37,6 +37,25 @@ CARD_CSS = f"""
 """
 
 
+# Compact page frame for the EDA page and the Order-line checker, so each fits (or nearly
+# fits) one 1920x1080 screen: a slim transparent header, less padding, a smaller title,
+# tighter spacing and smaller metric values. No font goes below 11 px.
+PAGE_CSS = """
+<style>
+[data-testid="stHeader"] { height: 2rem; background: transparent; }
+[data-testid="stMainBlockContainer"] { padding: 2.2rem 2rem 1rem 2rem; }
+[data-testid="stMainBlockContainer"] h1 { font-size: 1.7rem; padding: 0 0 1rem 0; }
+/* headings keep their 1rem bottom padding: Streamlit offsets it with a negative margin */
+[data-testid="stMainBlockContainer"] h3 { font-size: 1.15rem; padding: 0.2rem 0 1rem 0; }
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] { gap: 0.55rem; }
+[data-testid="stMetricLabel"] { min-height: 0; }
+[data-testid="stMetric"] > div:first-child { gap: 0; }
+[data-testid="stMetricValue"] { min-height: 0; height: auto; line-height: 1.25; }
+[data-testid="stMetricValue"] p { font-size: 1.55rem; }
+</style>
+"""
+
+
 def card(key: str):
     """A bordered container with the lighter card background (CSS keyed on the widget key)."""
     return st.container(border=True, key=f"card-{key}")

@@ -5,8 +5,9 @@
 
 An end-to-end retail analytics project on the Sample Superstore dataset (9,994 US
 order lines, 2014–2017). It covers data cleaning, a DuckDB star schema, SQL business
-analysis, customer segmentation, a loss-risk model, an interactive Streamlit dashboard,
-and an AI layer (an MCP server and Agent Skills) that lets Claude query the data.
+analysis, customer segmentation, a loss-risk model, a profit forecast for single order
+lines, an interactive Streamlit dashboard, and an AI layer (an MCP server and Agent Skills)
+that lets Claude query the data.
 
 <p align="center">
   <img src="reports/figures/star_schema.png" alt="Star schema: one fact table of order lines joined to four dimension tables" width="600">
@@ -147,13 +148,18 @@ Full analysis: [`notebooks/05_profit_model.ipynb`](notebooks/05_profit_model.ipy
 
 ## Interactive dashboard (step 5)
 
-A three-page Streamlit app built from the same tested code as the notebooks:
+A three-page Streamlit app in a dark theme, built from the same tested code as the notebooks
+([live demo](https://superstore-profit-intelligence-orel.streamlit.app/)):
 
 | Page | What it shows |
 |---|---|
+| **EDA** (landing page) | a compact one-screen layout: KPI cards (sales, profit, margin, orders, share of lines discounted >20%) with change vs. the previous year and monthly sparklines, then a 3-column grid of cards: a US state map (sales, profit or margin) and regions; discounts, monthly trend and seasonality; categories, sub-categories and shipping. Each card states its finding in the title, is fed by a saved query in `sql/`, and has a "Numbers behind the chart" table; filters for year, region and category |
 | **Overview** | sales, profit, margin and profit on >20%-discount lines, plus margin by discount band; filters for category, region and state |
-| **EDA** | KPI cards (sales, profit, margin, orders, share of lines discounted >20%) with change vs. the previous year and monthly sparklines; one finding per card for discounts, regions, a US state map (sales, profit or margin), monthly trend and seasonality, categories and sub-categories, and shipping, each fed by a saved query in `sql/`; filters for year, region and category |
-| **Order-line checker** | pick a sub-category, state, discount, quantity and list price (prefilled with the sub-category's median); get the predicted loss risk, the two discount rules and how similar past lines turned out (step 4), plus the predicted profit, Sales, predicted margin and the expected error for lines of that size (step 4b); a note when the price is still the typical one or when the two models disagree; SHAP explanations for both |
+| **Order-line checker** | pick a sub-category, state, discount, quantity and list price (prefilled with the sub-category's median); get the predicted loss risk, the two discount rules and how similar past lines turned out (step 4) next to the predicted profit, Sales, predicted margin and the expected error for lines of that size (step 4b); a note when the price is still the typical one or when the two models disagree; SHAP explanations for both |
+
+![EDA page: KPI cards, state map, regions, discounts, trend, seasonality, categories, sub-categories and shipping](reports/figures/dashboard_eda.png)
+
+![Order-line checker for 3 Binders in Texas at 30% off and a $15 list price: 75% loss risk, both rules flag it, predicted profit −$2.32](reports/figures/dashboard_checker.png)
 
 On first start the app rebuilds the DuckDB database from the raw CSV in this repo
 (the `.duckdb` file is not in git) and trains the step 4 Random Forest and the step 4b
@@ -178,16 +184,22 @@ streamlit_app.py       dashboard entry point (page navigation)
 app/data.py            cached database build, table loaders and model training
 app/views/             dashboard pages: overview, eda, risk_checker
 src/mcp_server.py      MCP server: read-only SQL, schema, saved queries, loss-risk model
+src/render_flow.py     renders reports/figures/project_flow.html to project_flow.png
+                       (headless Chrome, standard library only)
 .mcp.json              registers the MCP server with Claude Code for this project
-.claude/skills/        Agent Skills: profit-drilldown, sql-review, loss-risk-check, verify-project
+.claude/skills/        Agent Skills: 4 project skills (profit-drilldown, sql-review,
+                       loss-risk-check, verify-project) and 5 adopted from
+                       nimrodfisher/data-analytics-skills (MIT, license file included)
 sql/01-11_*.sql        business queries, each with question + insight in its header
 sql/SCHEMA.md          every table, column and type in the database
 tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation,
-                       leakage guards, dashboard pages (Streamlit AppTest), MCP server
+                       leakage guards for both models, profit-model checks (Sales identity,
+                       error bands), dashboard pages (Streamlit AppTest), MCP server
                        safety and protocol
 notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation,
                        04 loss-risk model, 05 profit model
-reports/figures/       charts used in this README
+reports/figures/       charts and dashboard screenshots used in this README, plus
+                       project_flow.html (source of project_flow.png)
 ```
 
 **Data model:** `fact_order_lines` with `dim_customer`, `dim_product`, `dim_location` and
@@ -227,7 +239,8 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 4. Optional: choose an app URL (subdomain).
 5. Open **Advanced settings** and select **Python 3.12**. No secrets are needed.
 6. Click **Deploy**. The first start installs `requirements.txt` (a few minutes), then
-   builds the database and trains the model (about 15 seconds) on the first visit.
+   builds the database and trains the two models on the first visit (about 9 seconds on
+   a laptop; slower on Streamlit Cloud's shared CPU).
 
 ## Roadmap
 
@@ -252,7 +265,7 @@ read-only access to the project's database and model:
 |---|---|
 | `list_tables`, `describe_table` | the data model, with descriptions from `sql/SCHEMA.md` |
 | `run_sql` | one read-only `SELECT`, capped at 200 rows |
-| `list_saved_queries`, `run_saved_query` | the `sql/01–07` business queries: question, insight and live result |
+| `list_saved_queries`, `run_saved_query` | the `sql/01–11` business queries: question, insight and live result |
 | `predict_loss_risk` | the step 4 model for one order line: risk, both discount rules, top SHAP factors, history |
 
 **Safety:** the DuckDB connection is read-only with external access disabled and its
@@ -268,6 +281,19 @@ loads them automatically, or you can invoke them by name:
 | `sql-review` | review a `sql/*.sql` file: conventions, a live run, and a check of every number in its header |
 | `loss-risk-check` | "Is 10 binders to Texas at 30% off risky?" -model risk, rules, factors, a safer alternative |
 | `verify-project` | rebuild, run all tests, and re-check the README's key numbers |
+
+Five general data-analytics skills are adopted from
+[nimrodfisher/data-analytics-skills](https://github.com/nimrodfisher/data-analytics-skills)
+by Nimrod Fisher (MIT license; see
+[`.claude/skills/THIRD_PARTY_LICENSE_data-analytics-skills.txt`](.claude/skills/THIRD_PARTY_LICENSE_data-analytics-skills.txt)):
+
+| Skill | Use it for |
+|---|---|
+| `analysis-qa-checklist` | a pre-delivery check of an analysis: completeness, assumptions, clear recommendations |
+| `executive-summary-generator` | condensing a detailed analysis into a short, decision-ready summary |
+| `insight-synthesis` | turning findings into insights tied to business impact |
+| `time-series-analysis` | trends, seasonality, anomalies and simple forecasts over time |
+| `visualization-builder` | choosing the right chart type and applying chart design best practices |
 
 **Set up (Windows PowerShell, from the project root):**
 ```powershell
@@ -292,6 +318,32 @@ I led the project and used Claude as a collaborator for both thinking and execut
   against the query output before committing.
 - **Claude Code as a pair programmer:** it built the pipeline under my review:
   cleaning, the DuckDB schema, integrity tests, the `run_sql` runner and the notebooks.
+- **SQL:** the numbers in the headers of the new queries (`sql/08–11`) were recomputed
+  independently from the raw CSV, outside Claude Code, and matched.
+- **Modelling:**
+  - For the profit model (step 4b), I agreed to try "predict the margin, then multiply
+    by Sales" only if predicting profit directly lost to the simple margin rule. It did no
+    better than the rule.
+  - Claude flagged that the first comparison of that choice leaned on the 2017 test year.
+    I required the choice to be re-validated on the 2015 and 2016 training-year folds and
+    shown in the notebook. It won on both.
+  - When a full SHAP run was too slow, Claude proposed computing SHAP on a fixed 500-line
+    sample with a stated seed, and I approved it.
+- **Dashboard:**
+  - I chose the design and the scope: a dark theme, EDA as the landing page with the
+    state map inside it, dropping the Explore and Customers pages, and later a compact
+    layout that fits roughly one screen.
+  - The notebook showed that the list price is the key input for the profit forecast. I
+    decided the Order-line checker should prefill it with the typical price instead of
+    leaving it empty, with a clear note about the larger error that brings.
+  - While testing the page, I found a confusing case: an "elevated" loss risk next to a
+    clearly positive profit forecast, with nothing explaining it. That led to a new note,
+    which names the risk factors the profit model doesn't use, such as state and region.
+- **AI layer:** a read-only MCP server and four project Agent Skills let Claude query the
+  data and the models directly, and tests try each kind of unsafe SQL. Five general
+  analytics skills are adopted from
+  [nimrodfisher/data-analytics-skills](https://github.com/nimrodfisher/data-analytics-skills)
+  (MIT).
 
 The project rules for the AI are in [`CLAUDE.md`](CLAUDE.md).
 

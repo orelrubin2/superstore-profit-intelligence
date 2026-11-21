@@ -1,0 +1,145 @@
+<!doctype html>
+<!-- Source of reports/figures/project_flow.png. Render at 1600x881 CSS px with a device
+     scale factor of 2 (3200x1762 PNG) in headless Chrome. Every number comes from the
+     notebooks and the README; update both together. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f6f8; --grid: #e8eaee; --ink: #1b2430; --muted: #5c6573;
+    --green: #1e7a55; --orange: #c9691f; --card: #ffffff; --border: #dde1e7;
+    --result: #eef1f5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 881px; }
+  body {
+    font-family: "Inter", system-ui, sans-serif; color: var(--ink); position: relative;
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 20px 20px; overflow: hidden;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  h1 { position: absolute; left: 48px; top: 36px; font-size: 58px; font-weight: 800;
+       letter-spacing: -0.5px; line-height: 1; }
+  .author { position: absolute; left: 48px; top: 108px; font-size: 32px; font-weight: 700;
+            color: var(--green); }
+  .question { position: absolute; left: 48px; top: 158px; font-size: 18px; color: var(--muted); }
+  .question b { color: var(--ink); font-weight: 600; }
+  .legend { position: absolute; right: 48px; top: 163px; font-size: 13px; color: var(--muted);
+            display: flex; gap: 22px; align-items: center; }
+  .legend span { display: flex; align-items: center; gap: 7px; }
+  .legend .box { width: 14px; height: 11px; border: 1px solid var(--border);
+                 background: var(--result); border-radius: 2px; }
+
+  .card { position: absolute; width: 350px; height: 278px; background: var(--card);
+          border: 1px solid var(--border); border-radius: 6px; padding: 18px 18px 18px 19px;
+          display: flex; flex-direction: column; }
+  .head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .num { width: 38px; height: 38px; border: 2px solid var(--ink); border-radius: 50%;
+         display: flex; align-items: center; justify-content: center; font-size: 17px;
+         font-weight: 700; flex: none; }
+  .head h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.2px; }
+  ul { list-style: none; }
+  li { position: relative; padding-left: 24px; font-size: 16px; line-height: 22px;
+       margin-bottom: 6px; }
+  li::before { content: ""; position: absolute; left: 4px; top: 7px; width: 9px; height: 9px;
+               background: var(--orange); transform: rotate(45deg); }
+  .k { color: var(--green); font-weight: 600; }
+  .result { margin-top: auto; background: var(--result); border-radius: 4px;
+            padding: 10px 12px 10px 12px; font-size: 16px; line-height: 23px; }
+  .result .label { font-size: 12px; letter-spacing: 1.6px; color: var(--muted);
+                   margin-bottom: 3px; line-height: 16px; }
+  .result b { font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 700; }
+  .result .split { border-top: 1px solid var(--border); margin-top: 5px; padding-top: 5px; }
+  .arrow { position: absolute; font-size: 30px; font-weight: 300; color: var(--muted); width: 36px;
+           text-align: center; }
+  .footer { position: absolute; top: 821px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <h1>Superstore Analysis</h1>
+  <div class="author">Orel Rubin</div>
+  <div class="question">Core question: <b>where does the company lose money, and how can it grow profit?</b></div>
+  <div class="legend mono"><span><svg width="13" height="13" viewBox="0 0 13 13"><rect x="2.5" y="2.5" width="8" height="8" fill="#c9691f" transform="rotate(45 6.5 6.5)"/></svg>Key decision</span><span><i class="box"></i>Result</span></div>
+
+  <!-- row 1 -->
+  <div class="card" style="left:48px; top:210px">
+    <div class="head"><div class="num">0</div><h2>Setup</h2></div>
+    <ul>
+      <li><span class="k">New repo</span>, Python 3.12 virtual env</li>
+      <li><span class="k">Free, open-source tools only</span></li>
+      <li>Rule: <span class="k">every finding must come from code</span></li>
+    </ul>
+  </div>
+  <div class="arrow" style="left:398px; top:333px">→</div>
+
+  <div class="card" style="left:434px; top:210px">
+    <div class="head"><div class="num">1</div><h2>Clean &amp; model</h2></div>
+    <ul>
+      <li><span class="k">cp1252 encoding</span>, found by reconciling totals</li>
+      <li><span class="k">Keep and flag outliers</span>, don't delete</li>
+    </ul>
+    <div class="result"><div class="label mono">RESULT</div><b>9,993</b> lines in a tested DuckDB star schema</div>
+  </div>
+  <div class="arrow" style="left:784px; top:333px">→</div>
+
+  <div class="card" style="left:820px; top:210px">
+    <div class="head"><div class="num">2</div><h2>SQL drill-down</h2></div>
+    <ul>
+      <li><span class="k">11 queries (01–11)</span>: category → discount → region → state → customers</li>
+      <li>Margin as <span class="k">SUM / SUM</span>, not a mean</li>
+    </ul>
+    <div class="result"><div class="label mono">RESULT</div>Discounts &gt;20% lose <b>$135K</b>, about <b>47%</b> of profit</div>
+  </div>
+  <div class="arrow" style="left:1170px; top:333px">→</div>
+
+  <div class="card" style="left:1206px; top:210px">
+    <div class="head"><div class="num">3</div><h2>Segmentation</h2></div>
+    <ul>
+      <li>High-volume = <span class="k">top 25% by gross sales</span></li>
+      <li><span class="k">RFM + K-Means</span> (k = 3), with a no-discount contrast</li>
+    </ul>
+    <div class="result"><div class="label mono">RESULT</div>Discount cluster finds <b>91%</b> of loss-making big buyers; RFM misses them</div>
+  </div>
+
+  <!-- row 2 -->
+  <div class="arrow" style="left:48px; top:637px">↳</div>
+  <div class="card" style="left:82px; top:516px">
+    <div class="head"><div class="num">4</div><h2>Loss &amp; profit models</h2></div>
+    <ul>
+      <li><span class="k">Order-time features only</span>; train 2014–16, test 2017</li>
+      <li><span class="k">4b: margin × Sales</span>; list price is key</li>
+    </ul>
+    <div class="result"><div class="label mono">RESULT · VS. RULE</div>Loss PR-AUC <b>0.96</b> vs. <b>0.75</b>
+      <div class="split">Profit MAE <b>$9.56</b> vs. <b>$16.33</b></div></div>
+  </div>
+  <div class="arrow" style="left:432px; top:637px">→</div>
+
+  <div class="card" style="left:468px; top:516px">
+    <div class="head"><div class="num">5</div><h2>Dashboard</h2></div>
+    <ul>
+      <li><span class="k">Rebuild data at startup</span>, same tested pipeline</li>
+      <li><span class="k">Dark theme</span>, pinned versions</li>
+    </ul>
+    <div class="result"><div class="label mono">RESULT</div>Live: EDA (landing), Overview, Order-line checker (loss risk + profit)</div>
+  </div>
+  <div class="arrow" style="left:818px; top:637px">→</div>
+
+  <div class="card" style="left:854px; top:516px">
+    <div class="head"><div class="num">6</div><h2>AI layer</h2></div>
+    <ul>
+      <li><span class="k">Read-only MCP server</span> for querying the data</li>
+      <li><span class="k">9 Agent Skills</span>: 4 project + 5 adopted (MIT)</li>
+    </ul>
+    <div class="result"><div class="label mono">RESULT</div>Claude queries the data through <b>6</b> tools; unsafe SQL is blocked</div>
+  </div>
+
+  <div class="footer mono" style="left:48px">Sample Superstore · 9,994 US order lines · 2014–2017</div>
+  <div class="footer mono" style="right:48px">Python · SQL (DuckDB) · scikit-learn · SHAP · Streamlit · MCP</div>
+</body>
+</html>
