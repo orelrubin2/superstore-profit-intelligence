@@ -108,6 +108,39 @@ first control and the model only to review lines discounted 1–20%.
 
 Full analysis: [`notebooks/04_loss_risk_model.ipynb`](notebooks/04_loss_risk_model.ipynb).
 
+### Profit model (step 4b)
+
+*Question: how much will an order line make or lose, predicted from information known
+when the order is placed?* Same rules as step 4: trained on 2014–2016, tested once on 2017;
+no profit-derived or customer-history features. Main metric: MAE in dollars per line
+(the 1% of lines with the largest |profit| carry 27.5% of all absolute profit, so RMSE
+and R² are dominated by a few lines).
+
+- **Predict the margin, then multiply by Sales.** A Random Forest that predicts the line's
+  margin, times Sales, misses by **$9.56 per line** on 2017 (R² 0.974), against **$16.33**
+  for a simple rule (Sales × the training margin of the discount band and sub-category) and
+  $58.23 for the median. Predicting profit directly only ties the rule ($16.01), and Linear
+  Regression is no better than the median. The margin × Sales choice also wins on both
+  training-year validation folds (2015 and 2016), not only on 2017.
+- **Four inputs are enough.** Sales, discount, list price and sub-category (the top 4 by
+  importance on the training years) beat all 11 allowed features (−$1.98 MAE, 95% CI
+  −$2.75 to −$1.23); state, ship mode, segment and month add nothing.
+- **The list price is essential.** With only the page's earlier inputs (no price) the
+  forecast is no better than the median ($57.89). With a typical (median) price instead of
+  the real one, the MAE rises from $9.56 to **$48.68**.
+- **It agrees with the loss-risk model** on 96.4% of 2017 lines. On the 119 lines where they
+  disagree, the profit sign matched the outcome 63% of the time, the loss-risk flag 37%.
+
+**Recommendation:** show the profit forecast next to the loss risk, with the list price as
+a visible input; Sales = list price × quantity × (1 − discount). Done in the Order-line
+checker (see the dashboard below).
+
+| MAE on 2017 by model and feature set | What the profit model relies on |
+|---|---|
+| ![MAE by model](reports/figures/05_03_mae_by_model.png) | ![Importance](reports/figures/05_04_importance.png) |
+
+Full analysis: [`notebooks/05_profit_model.ipynb`](notebooks/05_profit_model.ipynb).
+
 ## Project flow
 
 ![Project flow: stages 0-6 with the key decisions and the result of each](reports/figures/project_flow.png)
@@ -120,11 +153,12 @@ A three-page Streamlit app built from the same tested code as the notebooks:
 |---|---|
 | **Overview** | sales, profit, margin and profit on >20%-discount lines, plus margin by discount band; filters for category, region and state |
 | **EDA** | KPI cards (sales, profit, margin, orders, share of lines discounted >20%) with change vs. the previous year and monthly sparklines; one finding per card for discounts, regions, a US state map (sales, profit or margin), monthly trend and seasonality, categories and sub-categories, and shipping, each fed by a saved query in `sql/`; filters for year, region and category |
-| **Loss-risk checker** | pick a sub-category, state, discount and quantity; get the model's predicted loss risk, what the two discount rules would say, how similar past lines turned out, and a SHAP explanation |
+| **Order-line checker** | pick a sub-category, state, discount, quantity and list price (prefilled with the sub-category's median); get the predicted loss risk, the two discount rules and how similar past lines turned out (step 4), plus the predicted profit, Sales, predicted margin and the expected error for lines of that size (step 4b); a note when the price is still the typical one or when the two models disagree; SHAP explanations for both |
 
 On first start the app rebuilds the DuckDB database from the raw CSV in this repo
-(the `.duckdb` file is not in git) and trains the step 4 Random Forest on 2014–2016 with
-the settings tuned in notebook 04; both are cached, so later visits are instant.
+(the `.duckdb` file is not in git) and trains the step 4 Random Forest and the step 4b
+profit model on 2014–2016 with the settings tuned in notebooks 04 and 05; all are cached,
+so later visits are instant.
 
 ## Project structure
 
@@ -138,6 +172,8 @@ src/customer_features.py  customer-level RFM, discount, product and region featu
 src/segmentation.py    RFM scoring, R x F segments, K-Means with k-selection checks
 src/customer_comparison.py  step 3 comparisons with bootstrap confidence intervals
 src/loss_model.py      step 4 baselines, Logistic Regression, Random Forest, SHAP
+src/profit_model.py    step 4b baselines, Linear Regression, Random Forests (profit and
+                       margin x Sales), permutation importance, SHAP
 streamlit_app.py       dashboard entry point (page navigation)
 app/data.py            cached database build, table loaders and model training
 app/views/             dashboard pages: overview, eda, risk_checker
@@ -150,7 +186,7 @@ tests/                 pytest checks: keys, reconciliation with raw data, featur
                        leakage guards, dashboard pages (Streamlit AppTest), MCP server
                        safety and protocol
 notebooks/             01 data quality, 02 SQL findings, 03 customer segmentation,
-                       04 loss-risk model
+                       04 loss-risk model, 05 profit model
 reports/figures/       charts used in this README
 ```
 
@@ -201,6 +237,7 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 | 2. SQL business analysis |
 | 3. Customer segmentation: RFM scoring and K-Means, comparing loss-making and profitable high-volume customers |
 | 4. ML: loss-risk classifier (Random Forest vs. a discount-rule baseline and Logistic Regression), with SHAP |
+| 4b. ML: profit regression (margin × Sales Random Forest vs. a median and a margin-rule baseline and Linear Regression), with permutation importance and SHAP |
 | 5. Streamlit dashboard | 
 | 6. AI layer: Agent Skills and an MCP server for querying the data with Claude | 
 

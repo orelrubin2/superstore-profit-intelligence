@@ -68,7 +68,13 @@ Do not assume results in advance.
      category, region, ship mode, discount level) are the strongest predictors of
      loss-making order lines, and can we flag high-risk transactions before
      fulfillment better than a simple discount rule?"
-5. Streamlit dashboard (Overview, EDA, Loss-risk checker)
+4b. ML: profit regression for one order line (Linear Regression and Random Forest,
+   compared with a training-median and a Sales x margin-rule baseline; permutation
+   importance and SHAP); the recommended model predicts the margin and multiplies it
+   by Sales, and feeds the Order-line checker
+   - Business question: "How much will an order line make or lose, predicted from
+     features known when the order is placed?"
+5. Streamlit dashboard (Overview, EDA, Order-line checker)
 6. AI layer: Agent Skills and an MCP server for querying the data with Claude
 
 ## Future ideas

@@ -172,3 +172,23 @@ def test_bootstrap_mae_difference_sign():
                         "profit": np.arange(40, dtype=float)})
     result = pm.bootstrap_mae_difference(toy, toy["profit"].to_numpy(), np.zeros(40), n_boot=200)
     assert result["difference"] < 0 and result["ci_high"] < 0
+
+
+def test_sales_bands_are_contiguous():
+    """Every Sales value falls in exactly one band, and the lookup agrees with the bands."""
+    rng = np.random.default_rng(0)
+    sales = np.round(rng.lognormal(3, 1.5, 1000), 2)
+    bands = pm.error_by_sales_band(sales, np.zeros(1000), np.ones(1000))
+    assert len(bands) == 10 and bands["lines"].sum() == 1000
+    assert (bands["sales_low"].iloc[1:].to_numpy() == bands["sales_high"].iloc[:-1].to_numpy()).all()
+    assert bands["sales_low"].iloc[0] == sales.min() and bands["sales_high"].iloc[-1] == sales.max()
+    for value in sales:
+        row = pm.expected_error(bands, value)
+        inside = row["sales_low"] < value <= row["sales_high"] or \
+            (row["band"] == 0 and value == row["sales_low"])
+        assert inside
+    edge = bands["sales_high"].iloc[2]                      # a value on an edge: lower band
+    assert pm.expected_error(bands, edge)["band"] == 2
+    assert pm.expected_error(bands, edge + 0.001)["band"] == 3
+    assert pm.expected_error(bands, 0.0)["band"] == 0
+    assert pm.expected_error(bands, 1e9)["band"] == 9

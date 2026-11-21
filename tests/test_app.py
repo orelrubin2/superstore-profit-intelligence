@@ -203,3 +203,145 @@ def test_eda_state_map(con):
     expected = (f"Loss-making states discount **{percent(losing)}** of their lines above 20%, "
                 f"profitable states **{percent(winning)}**.")
     assert any(m.value == expected for m in at.markdown)
+
+
+# ---------- order-line checker: profit forecast (step 4b) ----------
+
+def dollars(value: float) -> str:
+    return f"−${abs(value):,.2f}" if value < 0 else f"${value:,.2f}"
+
+
+def profit_for(sub_category: str, discount: float, quantity: int, price: float) -> tuple[float, float]:
+    """(sales, predicted profit) from the cached profit model, as the page computes them."""
+    import src.profit_model as pm
+    from app import data
+
+    line = pm.build_line(sub_category, discount, quantity, price)
+    return float(line["sales"].iloc[0]), float(data.load_profit_model()["model"].predict(line)[0])
+
+
+def test_checker_profit_forecast_with_default_price():
+    """Prefilled median price: profit, Sales and margin are shown, with the typical-price note."""
+    from app import data
+
+    final = data.load_profit_model()
+    at = run_page("risk_checker")
+    assert not at.exception
+    price = round(float(final["prices"].loc["Binders", "median"]), 2)
+    assert at.number_input(key="price_Binders").value == price
+    sales, profit = profit_for("Binders", 0.2, 3, price)
+    values = metric_values(at)
+    assert values["Sales"] == dollars(sales)
+    assert values["Predicted profit"] == dollars(profit)
+    assert "Predicted margin" in values and "Predicted loss risk" in values
+    assert any("Typical Binders list price" in c.value for c in at.caption)
+    assert any("Expected error: for 2017 lines of similar size" in c.value for c in at.caption)
+    note = [w.value for w in at.warning if "typical Binders list price" in w.value]
+    assert note and dollars(final["mae_default_price"]) in note[0] \
+        and dollars(final["mae_real_price"]) in note[0]          # $48.68 vs $9.56 (notebook 05)
+
+
+def test_checker_real_price_removes_the_typical_price_note():
+    at = run_page("risk_checker")
+    at.number_input(key="price_Binders").set_value(15.0).run()
+    assert not at.exception
+    sales, profit = profit_for("Binders", 0.2, 3, 15.0)
+    assert sales == 15.0 * 3 * 0.8
+    assert metric_values(at)["Sales"] == dollars(sales)
+    assert metric_values(at)["Predicted profit"] == dollars(profit)
+    assert not any("typical Binders list price" in w.value for w in at.warning)
+
+
+def test_checker_price_follows_the_sub_category():
+    """Changing the sub-category prefills that sub-category's median list price."""
+    from app import data
+
+    at = run_page("risk_checker")
+    at.selectbox[0].set_value("Chairs").run()
+    assert not at.exception
+    median = round(float(data.load_profit_model()["prices"].loc["Chairs", "median"]), 2)
+    assert at.number_input(key="price_Chairs").value == median
+
+
+def test_disagreement_note():
+    from app.views.risk_checker import disagreement_note
+
+    stats = {"share": 0.036, "profit_sign_right": 0.63, "loss_model_right": 0.37}
+    assert disagreement_note(0.7, -20.0, 5.0, stats) is None          # both say loss
+    assert disagreement_note(0.2, 15.0, 5.0, stats) is None           # both say profit
+    high_risk = disagreement_note(0.6, 72.77, 10.0, stats)
+    assert "expects a loss (60%)" in high_risk and "positive ($72.77)" in high_risk
+    assert "break-even" not in high_risk                                # $72.77 > $10 error
+    low_risk = disagreement_note(0.43, -3.0, 5.0, stats)
+    assert "forecast is a loss (−$3.00)" in low_risk and "break-even" in low_risk
+    assert "63%" in low_risk and "37%" in low_risk
+
+
+def test_checker_shows_disagreement():
+    """Machines in Texas at 30%: high loss risk but a positive profit forecast (default price)."""
+    import src.loss_model as lm
+    from app import data
+
+    model, final = data.load_model(), data.load_profit_model()
+    price = round(float(final["prices"].loc["Machines", "median"]), 2)
+    line = lm.build_line(model, "Machines", "Texas", 0.3, 3, price)
+    risk = model["forest"].predict_proba(line[lm.FEATURES])[0, 1]
+    _, profit = profit_for("Machines", 0.3, 3, price)
+    assert risk >= 0.5 and profit >= 0, "the models no longer disagree here; pick another case"
+
+    at = run_page("risk_checker")
+    at.selectbox[0].set_value("Machines").run()
+    at.select_slider[0].set_value(0.3).run()
+    assert not at.exception
+    assert any("The two models disagree" in i.value for i in at.info)
+
+
+def test_elevated_risk_note():
+    """Elevated (not high) risk next to a clearly positive profit: explain with the factors
+    the profit model does not use; no note when the profit is within the expected error."""
+    from app.views.risk_checker import disagreement_note
+
+    stats = {"share": 0.036, "profit_sign_right": 0.63, "loss_model_right": 0.37}
+    raisers = ["state = texas (+12.3 pp)", "region = central (+4.5 pp)"]
+    note = disagreement_note(0.46, 12.86, 2.25, stats, 0.187, raisers)
+    assert "loss risk is elevated (46%" in note and "clearly positive ($12.86" in note
+    assert "state = texas (+12.3 pp), region = central (+4.5 pp)" in note
+    assert "the profit model does not see them" in note
+    assert disagreement_note(0.46, 1.50, 2.25, stats, 0.187, raisers) is None   # within error
+    assert disagreement_note(0.10, 12.86, 2.25, stats, 0.187, raisers) is None  # below average
+    # a negative profit below 50% risk stays the existing disagreement note
+    assert "profit forecast is a loss" in disagreement_note(0.46, -5.0, 2.25, stats, 0.187, raisers)
+
+
+def test_risk_raisers_skip_profit_model_inputs():
+    import pandas as pd
+    from app.views.risk_checker import risk_raisers
+
+    contributions = pd.Series({"discount": -0.19, "state": 0.123, "region": 0.045,
+                               "sub_category": 0.04, "category": 0.02, "quantity": 0.01,
+                               "ship_mode": -0.01})
+    line = pd.Series({"state": "Texas", "region": "Central"})
+    assert risk_raisers(contributions, line) == ["state = texas (+12.3 pp)",
+                                                 "region = central (+4.5 pp)"]
+
+
+def test_checker_explains_elevated_risk_with_positive_profit():
+    """Binders / Texas / 15% / 3 units / $15: elevated risk but a clearly positive profit."""
+    import src.loss_model as lm
+    import src.profit_model as pm
+    from app import data
+
+    model, final = data.load_model(), data.load_profit_model()
+    line = lm.build_line(model, "Binders", "Texas", 0.15, 3, 15.0)
+    risk = model["forest"].predict_proba(line[lm.FEATURES])[0, 1]
+    sales, profit = profit_for("Binders", 0.15, 3, 15.0)
+    error = float(pm.expected_error(final["error_bands"], sales)["mae"])
+    assert model["base_rate"] <= risk < 0.5 and profit > error, "case no longer elevated; pick another"
+
+    at = run_page("risk_checker")
+    at.select_slider[0].set_value(0.15).run()
+    at.number_input(key="price_Binders").set_value(15.0).run()
+    assert not at.exception
+    assert metric_values(at)["Predicted profit"] == dollars(profit)
+    notes = [i.value for i in at.info if "loss risk is elevated" in i.value]
+    assert notes and "state = texas" in notes[0] and "the profit model does not see them" in notes[0]

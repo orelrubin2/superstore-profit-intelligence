@@ -17,7 +17,7 @@ st.set_page_config(page_title="Superstore Profit Intelligence", page_icon="📊"
 pages = st.navigation([
     st.Page(eda.render, title="EDA", url_path="eda", default=True),
     st.Page(overview.render, title="Overview", url_path="overview"),
-    st.Page(risk_checker.render, title="Loss-risk checker", url_path="risk-checker"),
+    st.Page(risk_checker.render, title="Order-line checker", url_path="risk-checker"),
 ])
 st.sidebar.caption("Data: Sample Superstore (2014-2017). "
                    "[Source code](https://github.com/orelrubin2/superstore-profit-intelligence)")

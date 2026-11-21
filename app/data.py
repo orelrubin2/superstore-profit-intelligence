@@ -2,8 +2,9 @@
 
 On first use the app builds the DuckDB database from the raw CSV in the repo
 (the .duckdb file is not in git), then trains the step 4 Random Forest on
-2014-2016 with the tuned settings from notebook 04. Both are cached for the
-life of the server process, so later visits are instant.
+2014-2016 with the tuned settings from notebook 04 and the step 4b profit model
+with the settings from notebook 05. All are cached for the life of the server
+process, so later visits are instant.
 
 All analysis logic is reused from src/; nothing is recomputed differently here.
 """
@@ -15,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 import src.loss_model as lm
+import src.profit_model as pm
 from src.build_database import DB_PATH, build_database
 
 DISCOUNT_BANDS = ["0%", "1-20%", "21-40%", ">40%"]
@@ -72,3 +74,17 @@ def load_model() -> dict:
     """The step 4 Random Forest and Baseline B, trained on 2014-2016, plus lookups."""
     with connect() as con:
         return lm.train_final_model(con)
+
+
+@st.cache_resource(show_spinner="Training the profit model (first visit only)...")
+def load_profit_model() -> dict:
+    """The step 4b margin x sales forest (trained on 2014-2016) with its 2017 error tables.
+
+    The step 4 loss-risk probabilities for 2017 are passed in, so the page can say how
+    often the two models disagreed and which one was right.
+    """
+    loss_model = load_model()
+    with connect() as con:
+        _, test = lm.split_by_year(lm.load_lines(con))
+        risk_2017 = loss_model["forest"].predict_proba(test[lm.FEATURES])[:, 1]
+        return pm.train_final_model(con, risk_2017)

@@ -257,17 +257,24 @@ def rank_features(lines: pd.DataFrame, params: dict) -> pd.DataFrame:
     return grouped_permutation_importance(forest, val, ALL_FEATURES)
 
 
-def explain(forest: Pipeline, lines: pd.DataFrame, features: list[str]) -> tuple[float, pd.DataFrame]:
-    """Base value and per-feature SHAP values (dollars) for each line.
-
-    base + the row sum of the per-feature values = the forest's predicted profit.
-    One-hot columns are summed back into their original feature.
-    """
+def make_explainer(forest: Pipeline):
+    """SHAP TreeExplainer for the forest inside the pipeline."""
     import shap
 
+    return shap.TreeExplainer(forest.named_steps["model"])
+
+
+def explain(forest: Pipeline, lines: pd.DataFrame, features: list[str],
+            explainer=None) -> tuple[float, pd.DataFrame]:
+    """Base value and per-feature SHAP values of the forest's output for each line.
+
+    base + the row sum of the per-feature values = the forest's prediction (profit for
+    a direct-profit forest, margin for MarginForest.forest). One-hot columns are summed
+    back into their original feature.
+    """
     prep = forest.named_steps["prep"]
     x = pd.DataFrame(prep.transform(lines[features]), columns=prep.get_feature_names_out())
-    explainer = shap.TreeExplainer(forest.named_steps["model"])
+    explainer = explainer or make_explainer(forest)
     values = explainer.shap_values(x, check_additivity=False)
     base = float(np.ravel(explainer.expected_value)[0])
     per_column = pd.DataFrame(values, columns=x.columns, index=lines.index)
@@ -344,3 +351,103 @@ def bootstrap_mae_difference(lines: pd.DataFrame, pred_a: np.ndarray, pred_b: np
     return {"difference": float(err_a.mean() - err_b.mean()),
             "ci_low": float(np.percentile(diffs, 2.5)),
             "ci_high": float(np.percentile(diffs, 97.5))}
+
+
+def error_by_sales_band(sales: np.ndarray, actual: np.ndarray, predicted: np.ndarray,
+                        n_bands: int = 10) -> pd.DataFrame:
+    """MAE per Sales band (deciles by default): what error to expect for a line of that size.
+
+    Bands are contiguous: band i covers sales_low < Sales <= sales_high (the first band also
+    includes its lower edge), and each band's sales_high is the next band's sales_low, so
+    every Sales value belongs to exactly one band (see expected_error).
+    """
+    frame = pd.DataFrame({"sales": sales, "error": np.abs(np.asarray(actual) - predicted)})
+    frame["band"], edges = pd.qcut(frame["sales"], n_bands, labels=False, retbins=True)
+    table = (frame.groupby("band")
+             .agg(lines=("error", "size"), mae=("error", "mean"))
+             .reset_index())
+    table.insert(1, "sales_low", edges[:-1])
+    table.insert(2, "sales_high", edges[1:])
+    return table
+
+
+def expected_error(bands: pd.DataFrame, sales: float) -> pd.Series:
+    """The error_by_sales_band row whose (sales_low, sales_high] band holds this Sales.
+
+    Below the first edge: the first band; above the last edge: the last band.
+    """
+    position = int(np.searchsorted(bands["sales_high"].to_numpy(), sales, side="left"))
+    return bands.iloc[min(position, len(bands) - 1)]
+
+
+def disagreement_stats(risk: np.ndarray, predicted_profit: np.ndarray,
+                       actual_profit: np.ndarray, threshold: float = 0.5) -> dict:
+    """How often the loss-risk model (risk >= threshold) and the profit sign disagree, and
+    which of the two matched the actual outcome on the lines where they disagree."""
+    risk_says_loss = np.asarray(risk) >= threshold
+    profit_says_loss = np.asarray(predicted_profit) < 0
+    actual_loss = np.asarray(actual_profit) < 0
+    differ = risk_says_loss != profit_says_loss
+    n = int(differ.sum())
+    return {"lines": len(differ), "disagree": n, "share": n / len(differ),
+            "loss_model_right": float((risk_says_loss == actual_loss)[differ].mean()) if n else np.nan,
+            "profit_sign_right": float((profit_says_loss == actual_loss)[differ].mean()) if n else np.nan}
+
+
+# ---------------------------------------------------------------- final model for apps
+
+# Chosen in notebooks/05_profit_model.ipynb: the top-4 feature set (permutation importance on
+# the training years) and the margin x sales forest settings tuned on the expanding-window
+# folds. The dashboard reuses them, so it runs exactly the model the notebook evaluated.
+RECOMMENDED_FEATURES = ["sales", "discount", "unit_price", "sub_category"]
+TUNED_MARGIN_FOREST_PARAMS = {"max_depth": None, "min_samples_leaf": 1}
+
+
+def build_line(sub_category: str, discount: float, quantity: int, list_price: float) -> pd.DataFrame:
+    """One order line in the recommended model's format; Sales is computed from the inputs."""
+    line = pd.DataFrame([{"sub_category": sub_category, "discount": float(discount),
+                          "quantity": int(quantity), "unit_price": float(list_price)}])
+    return line.assign(sales=derived_sales(line))
+
+
+def train_final_model(con: duckdb.DuckDBPyConnection, loss_risk_2017: np.ndarray | None = None) -> dict:
+    """Train the recommended profit model on 2014-2016 and collect what an app needs.
+
+    Returns the model and its SHAP explainer, list-price statistics per sub-category
+    (training years), the 2017 error by Sales decile, the 2017 MAE with the real and with
+    the default (sub-category median) list price, and, if the step 4 loss-risk
+    probabilities for the 2017 lines are given (in row_id order), how often the two
+    models disagree. 2017 is used for reporting only, never for fitting.
+    """
+    lines = load_lines(con)
+    train, test = split_by_year(lines)
+    model = MarginForest(RECOMMENDED_FEATURES, **TUNED_MARGIN_FOREST_PARAMS).fit(train)
+    prices = (train.groupby("sub_category")["unit_price"]
+              .describe(percentiles=[0.25, 0.5, 0.75])[["min", "25%", "50%", "75%", "max"]]
+              .rename(columns={"25%": "q25", "50%": "median", "75%": "q75"}))
+    predicted = model.predict(test)
+    default = test.assign(unit_price=test["sub_category"].map(prices["median"]))
+    default = default.assign(sales=derived_sales(default))
+    out = {
+        "model": model,
+        "explainer": make_explainer(model.forest),
+        "prices": prices,
+        "error_bands": error_by_sales_band(test["sales"].to_numpy(), test[TARGET].to_numpy(),
+                                           predicted),
+        "mae_real_price": mean_absolute_error(test[TARGET], predicted),
+        "mae_default_price": mean_absolute_error(test[TARGET], model.predict(default)),
+    }
+    if loss_risk_2017 is not None:
+        out["disagreement"] = disagreement_stats(loss_risk_2017, predicted, test[TARGET].to_numpy())
+    return out
+
+
+def explain_line(final: dict, line: pd.DataFrame) -> tuple[float, pd.Series, float]:
+    """(base margin, per-feature margin contributions, predicted margin) for one line.
+
+    predicted margin = base + sum(contributions); predicted profit = margin x Sales.
+    """
+    model = final["model"]
+    base, per_feature = explain(model.forest, line, model.features, final["explainer"])
+    contributions = per_feature.iloc[0]
+    return base, contributions, base + float(contributions.sum())
