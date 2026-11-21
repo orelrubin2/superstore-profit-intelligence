@@ -36,6 +36,10 @@ def money(value: float) -> str:
     return f"−${abs(value):,.0f}" if value < 0 else f"${value:,.0f}"
 
 
+def percent(value: float) -> str:
+    return f"−{abs(value) * 100:.1f}%" if value < 0 else f"{value * 100:.1f}%"
+
+
 @pytest.fixture(scope="module")
 def con():
     if not DB_PATH.exists():
@@ -49,7 +53,7 @@ def test_entry_point_runs():
     """streamlit_app.py starts and renders the default page without errors."""
     at = AppTest.from_file(str(ENTRY_POINT), default_timeout=TIMEOUT).run()
     assert not at.exception
-    assert at.title[0].value == "Where does the company lose money?"
+    assert at.title[0].value == "Exploratory data analysis"
 
 
 def test_overview_matches_database(con):
@@ -76,66 +80,69 @@ def test_overview_filters(con):
     assert metric_values(at)["Profit"] == money(profit)
 
 
-def explore_kpis_sql(con, where: str = "TRUE") -> dict:
-    sales, profit, orders, customers = con.execute(f"""
-        SELECT SUM(sales), SUM(profit), COUNT(DISTINCT order_id), COUNT(DISTINCT customer_id)
+def eda_kpis_sql(con, where: str = "TRUE") -> dict:
+    sales, profit, orders, high = con.execute(f"""
+        SELECT SUM(sales), SUM(profit), COUNT(DISTINCT order_id), AVG((discount > 0.2)::INT)
         FROM orders_clean WHERE {where}
     """).fetchone()
     return {"Sales": money(sales), "Profit": money(profit),
-            "Profit margin": f"{profit / sales * 100:.1f}%",
-            "Orders": f"{orders:,}", "Customers": f"{customers:,}"}
+            "Profit margin": percent(profit / sales), "Orders": f"{orders:,}",
+            "Lines discounted >20%": percent(high)}
 
 
-def test_explore_matches_database(con):
-    """Unfiltered KPIs on the Explore page equal the SQL totals; every widget option renders."""
-    at = run_page("explore")
+def test_eda_matches_database(con):
+    """Default view (2017) shows 2017 KPIs, and the sales change equals query 06's growth."""
+    at = run_page("eda")
     assert not at.exception
-    assert metric_values(at) == explore_kpis_sql(con)
-    for radio, options in [("map_metric", ["Profit", "Margin"]), ("city_rank", ["Profit"]),
-                           ("trend_measure", ["Profit"])]:
-        for option in options:
-            at.radio(key=radio).set_value(option).run()
-            assert not at.exception
+    assert at.selectbox(key="eda_year").value == 2017
+    assert metric_values(at) == eda_kpis_sql(con, "order_year = 2017")
+    growth = con.execute(
+        "SELECT sales_growth_pct FROM (SELECT order_year, ROUND((SUM(sales) - LAG(SUM(sales)) "
+        "OVER (ORDER BY order_year)) / LAG(SUM(sales)) OVER (ORDER BY order_year) * 100, 2) "
+        "AS sales_growth_pct FROM orders_clean GROUP BY order_year) WHERE order_year = 2017"
+    ).fetchone()[0]                                                          # 20.36% (query 06)
+    sales = next(m for m in at.metric if m.label == "Sales")
+    assert sales.delta == f"{growth / 100:+.1%}"
 
 
-def test_explore_filters(con):
-    """Year + region + category + segment filters give the same KPIs as SQL."""
-    at = run_page("explore")
-    at.multiselect[0].set_value([2017]).run()
-    at.multiselect[1].set_value(["Central"]).run()
-    at.multiselect[2].set_value(["Furniture", "Technology"]).run()
-    at.multiselect[3].set_value(["Consumer"]).run()
+def test_eda_filters(con):
+    """Year + region + category filters give the same KPIs as SQL; 'All years' has no delta."""
+    at = run_page("eda")
+    at.selectbox(key="eda_year").set_value(2016).run()
+    at.multiselect(key="eda_region").set_value(["Central"]).run()
+    at.multiselect(key="eda_category").set_value(["Furniture"]).run()
     assert not at.exception
-    assert metric_values(at) == explore_kpis_sql(con, """order_year = 2017 AND region = 'Central'
-        AND category IN ('Furniture', 'Technology') AND segment = 'Consumer'""")
+    assert metric_values(at) == eda_kpis_sql(
+        con, "order_year = 2016 AND region = 'Central' AND category = 'Furniture'")
+    at.selectbox(key="eda_year").set_value("All years").run()
+    assert not at.exception
+    assert metric_values(at) == eda_kpis_sql(con, "region = 'Central' AND category = 'Furniture'")
+    assert not any(m.delta for m in at.metric)
 
 
-def test_explore_aggregations(con):
-    """Map covers every state; top cities match SQL, keyed by city + state."""
+def test_eda_queries_match_files(con):
+    """run_query on unfiltered lines returns what the saved .sql files return on the database."""
+    import pandas as pd
     from app import data
-    from app.views import explore
+    from src.run_sql import execute_sql_file
 
-    lines = data.load_lines()
-    states = explore.by_state(lines)
-    assert len(states) == 49 and states["fips"].is_unique
-    for rank_by in ["sales", "profit"]:
-        expected = con.execute(f"""
-            SELECT city, state FROM orders_clean GROUP BY city, state
-            ORDER BY SUM({rank_by}) DESC LIMIT 10
-        """).fetchall()
-        got = explore.top_cities(lines, rank_by)
-        assert list(zip(got["city"], got["state"])) == expected
-    monthly = explore.monthly_by_region(lines)
-    assert len(monthly) == 48 * 4
-    assert abs(monthly["sales"].sum() - lines["sales"].sum()) < 0.01
+    for file in ["03_discount_impact_by_category.sql", "04_high_discounts_by_region_segment.sql",
+                 "08_shipping.sql", "10_monthly_trend.sql"]:
+        for number, expected in execute_sql_file(con, data.SQL_DIR / file):
+            got = data.run_query(file, number)
+            pd.testing.assert_frame_equal(got, expected, check_dtype=False)
+    shipping = data.run_query("08_shipping.sql")
+    assert len(shipping) == 4 and shipping["order_lines"].sum() == 9993
 
 
-def test_customers_page(con):
-    at = run_page("customers")
-    assert not at.exception
-    hv_loss = con.execute(
-        "SELECT COUNT(*) FROM customer_features WHERE volume_group = 'HV-loss'").fetchone()[0]
-    assert metric_values(at)["HV-loss customers"] == f"{hv_loss:,}"
+def test_eda_every_year_renders():
+    """Every Year option renders; 2014 has no previous year, so its cards show no delta."""
+    at = run_page("eda")
+    for year in ["All years", 2014, 2015, 2016]:
+        at.selectbox(key="eda_year").set_value(year).run()
+        assert not at.exception
+    at.selectbox(key="eda_year").set_value(2014).run()
+    assert not any(m.delta for m in at.metric)
 
 
 def test_risk_checker_page():
@@ -169,3 +176,30 @@ def test_explanation_adds_up_to_prediction():
     assert np.isclose(base + contributions.iloc[0].sum(), predicted, atol=1e-6)
     assert model["category_of"]["Binders"] == "Office Supplies"
     assert model["region_of"]["Texas"] == "Central"
+
+
+def test_eda_state_map(con):
+    """The map covers every state with a unique FIPS code, every metric renders, and the
+    sentence under the map matches SQL (default year 2017)."""
+    from app import data
+    from app.views import eda
+
+    states = eda.state_frame(data.run_query("09_state_profitability.sql"))
+    assert len(states) == 49 and states["fips"].is_unique
+    at = run_page("eda")
+    for option in ["Profit", "Margin", "Sales"]:
+        at.radio(key="eda_map_metric").set_value(option).run()
+        assert not at.exception
+    losing, winning = con.execute("""
+        WITH per_state AS (
+            SELECT state, SUM(profit) AS profit, COUNT(*) AS n,
+                   SUM((discount > 0.2)::INT) AS high
+            FROM orders_clean WHERE order_year = 2017 GROUP BY state
+        )
+        SELECT SUM(high) FILTER (WHERE profit < 0) / SUM(n) FILTER (WHERE profit < 0),
+               SUM(high) FILTER (WHERE profit >= 0) / SUM(n) FILTER (WHERE profit >= 0)
+        FROM per_state
+    """).fetchone()
+    expected = (f"Loss-making states discount **{percent(losing)}** of their lines above 20%, "
+                f"profitable states **{percent(winning)}**.")
+    assert any(m.value == expected for m in at.markdown)

@@ -6,7 +6,7 @@ import streamlit as st
 
 import src.loss_model as lm
 from app import data
-from app.style import BLUE, LOSS, pct, signed_pp
+from app.style import BLUE, LOSS, TEXT, pct, signed_pp
 
 FEATURE_LABELS = {"discount": "Discount", "sub_category": "Sub-category", "state": "State",
                   "category": "Category", "region": "Region", "unit_price": "List unit price",
@@ -113,7 +113,7 @@ def render() -> None:
                      color=alt.condition("datum.contribution >= 0", alt.value(LOSS), alt.value(BLUE)),
                      tooltip=["factor:N", alt.Tooltip("contribution:Q", format="+.1%")]))
     labels = chart.mark_text(align="left", dx=4, fontSize=12).encode(
-        text="label:N", color=alt.value("#0b0b0b"))
+        text="label:N", color=alt.value(TEXT))
     st.altair_chart((chart + labels).properties(height=200), width="stretch")
 
     parts = [f"{describe(f, line.iloc[0]).lower()} ({signed_pp(v)})" for f, v in top.items()]

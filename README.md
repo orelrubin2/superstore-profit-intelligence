@@ -114,13 +114,12 @@ Full analysis: [`notebooks/04_loss_risk_model.ipynb`](notebooks/04_loss_risk_mod
 
 ## Interactive dashboard (step 5)
 
-A four-page Streamlit app built from the same tested code as the notebooks:
+A three-page Streamlit app built from the same tested code as the notebooks:
 
 | Page | What it shows |
 |---|---|
 | **Overview** | sales, profit, margin and profit on >20%-discount lines, plus margin by discount band; filters for category, region and state |
-| **Explore** | KPI row (sales, profit, margin, orders, customers); US map by state (sales, profit or margin); top 10 cities; monthly trend by region; sales and profit by sub-category; sales by segment; filters for year, region, category and segment |
-| **Customers** | loss-making vs. profitable high-volume customers, their discount mix, and where they fall in the K-Means clusters |
+| **EDA** | KPI cards (sales, profit, margin, orders, share of lines discounted >20%) with change vs. the previous year and monthly sparklines; one finding per card for discounts, regions, a US state map (sales, profit or margin), monthly trend and seasonality, categories and sub-categories, and shipping, each fed by a saved query in `sql/`; filters for year, region and category |
 | **Loss-risk checker** | pick a sub-category, state, discount and quantity; get the model's predicted loss risk, what the two discount rules would say, how similar past lines turned out, and a SHAP explanation |
 
 On first start the app rebuilds the DuckDB database from the raw CSV in this repo
@@ -141,11 +140,11 @@ src/customer_comparison.py  step 3 comparisons with bootstrap confidence interva
 src/loss_model.py      step 4 baselines, Logistic Regression, Random Forest, SHAP
 streamlit_app.py       dashboard entry point (page navigation)
 app/data.py            cached database build, table loaders and model training
-app/views/             dashboard pages: overview, customers, risk_checker
+app/views/             dashboard pages: overview, eda, risk_checker
 src/mcp_server.py      MCP server: read-only SQL, schema, saved queries, loss-risk model
 .mcp.json              registers the MCP server with Claude Code for this project
 .claude/skills/        Agent Skills: profit-drilldown, sql-review, loss-risk-check, verify-project
-sql/01-07_*.sql        business queries, each with question + insight in its header
+sql/01-11_*.sql        business queries, each with question + insight in its header
 sql/SCHEMA.md          every table, column and type in the database
 tests/                 pytest checks: keys, reconciliation with raw data, feature recomputation,
                        leakage guards, dashboard pages (Streamlit AppTest), MCP server

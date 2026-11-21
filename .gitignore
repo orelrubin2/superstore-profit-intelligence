@@ -222,3 +222,6 @@ __marimo__/
 # Generated database (rebuild with: python -m src.build_database)
 data/processed/*.duckdb
 data/processed/*.duckdb.wal
+
+# R
+.Rhistory

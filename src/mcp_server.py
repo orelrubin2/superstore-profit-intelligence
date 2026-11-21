@@ -3,7 +3,7 @@
 Runs locally over stdio; Claude Code starts it from .mcp.json. Tools:
     list_tables, describe_table      the data model, with descriptions from sql/SCHEMA.md
     run_sql                          one read-only SELECT, capped at MAX_ROWS rows
-    list_saved_queries,              the user's sql/01-07 queries: business question,
+    list_saved_queries,              the saved sql/NN_*.sql queries: business question,
     run_saved_query                  insight from the header, and the live result
     predict_loss_risk                the step 4 model for one order line, with SHAP factors
 Resource:
@@ -174,7 +174,7 @@ def run_sql(query: str) -> dict:
 
 @mcp.tool()
 def list_saved_queries() -> list[dict]:
-    """The project's saved business queries (sql/01-07) with their business questions."""
+    """The project's saved business queries (sql/NN_*.sql) with their business questions."""
     out = []
     for path in sorted(SQL_DIR.glob("[0-9][0-9]_*.sql")):
         header = read_header(path)

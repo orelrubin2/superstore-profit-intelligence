@@ -8,15 +8,17 @@ life of the server process, so later visits are instant.
 All analysis logic is reused from src/; nothing is recomputed differently here.
 """
 
+from pathlib import Path
+
 import duckdb
 import pandas as pd
 import streamlit as st
 
-import src.customer_comparison as cc
 import src.loss_model as lm
 from src.build_database import DB_PATH, build_database
 
 DISCOUNT_BANDS = ["0%", "1-20%", "21-40%", ">40%"]
+SQL_DIR = Path(__file__).resolve().parents[1] / "sql"
 
 
 @st.cache_resource(show_spinner="Building the database from the raw data (first visit only)...")
@@ -49,17 +51,20 @@ def filter_lines(lines: pd.DataFrame, **chosen) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def load_customers() -> pd.DataFrame:
-    """Customer features joined with RFM segment and clusters (step 3)."""
-    with connect() as con:
-        return cc.load_customers(con)
+def run_query(file: str, statement: int = 1, years: tuple = (), regions: tuple = (),
+              categories: tuple = ()) -> pd.DataFrame:
+    """Run statement number `statement` of sql/<file> on the filtered order lines.
 
-
-@st.cache_data(show_spinner=False)
-def discount_mix_by_group() -> pd.DataFrame:
-    """Gross-sales share by discount band for HV-loss and HV-profit customers."""
-    with connect() as con:
-        return cc.group_mix(con, "discount_band")
+    The committed query text runs unchanged: the lines matching the filters are
+    registered as `orders_clean` in a separate in-memory DuckDB, so every number
+    on the page comes from the saved query. Empty filters mean 'all'.
+    """
+    lines = filter_lines(load_lines(), order_year=list(years), region=list(regions),
+                         category=list(categories))
+    statements = duckdb.extract_statements((SQL_DIR / file).read_text(encoding="utf-8"))
+    with duckdb.connect() as con:
+        con.register("orders_clean", lines)
+        return con.execute(statements[statement - 1]).df()
 
 
 @st.cache_resource(show_spinner="Training the loss-risk model (first visit only)...")

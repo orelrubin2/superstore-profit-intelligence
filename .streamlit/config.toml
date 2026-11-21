@@ -1,0 +1,14 @@
+# Dark theme for the whole dashboard. Colors match app/style.py.
+[theme]
+base = "dark"
+primaryColor = "#5aa9ff"
+backgroundColor = "#0e1729"
+secondaryBackgroundColor = "#16223a"
+textColor = "#e6e9ef"
+borderColor = "#33435f"
+linkColor = "#5aa9ff"
+chartCategoricalColors = ["#5aa9ff", "#ff9a52", "#3ddc97", "#f5c542"]
+
+[theme.sidebar]
+backgroundColor = "#0b1322"
+secondaryBackgroundColor = "#16223a"

@@ -92,7 +92,7 @@ def test_list_and_describe_tables_cover_everything():
 
 def test_saved_queries():
     saved = server.list_saved_queries()
-    assert [q["number"] for q in saved] == ["01", "02", "03", "04", "05", "06", "07"]
+    assert [q["number"] for q in saved] == [f"{n:02d}" for n in range(1, 12)]
     assert all(q["business_question"] for q in saved)
     result = server.run_saved_query("3")
     assert "Insight" in result["header"]

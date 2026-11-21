@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from app import data
-from app.style import BLUE, LOSS, money, pct
+from app.style import BLUE, LOSS, TEXT, money, pct
 
 HIGH_DISCOUNT = 0.20
 
@@ -58,7 +58,7 @@ def render() -> None:
                               alt.Tooltip("margin:Q", title="Margin", format=".1%"),
                               alt.Tooltip("loss_line_share:Q", title="Loss-making lines", format=".0%")]))
     labels = chart.mark_text(dy=-8, fontSize=12).encode(
-        text=alt.Text("margin:Q", format=".1%"), color=alt.value("#0b0b0b"))
+        text=alt.Text("margin:Q", format=".1%"), color=alt.value(TEXT))
     st.subheader("Profit margin by discount band")
     st.altair_chart((chart + labels).properties(height=320), width="stretch")
 
@@ -70,6 +70,7 @@ def render() -> None:
             f"They bring {money(high['sales'].sum())} in sales and "
             f"**{money(high['profit'].sum())} in profit**, "
             f"and {pct(high['is_loss'].mean(), 0)} of them lose money."
+            .replace("$", "\\$")   # escape $ so markdown does not render LaTeX
         )
 
     with st.expander("Numbers behind the chart"):
